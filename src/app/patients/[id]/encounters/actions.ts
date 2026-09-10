@@ -32,6 +32,24 @@ export async function saveEncounter(patientId: string, formData: FormData) {
   const source = (str(formData, 'source') || 'manual') as CaptureSource;
   const aiConfidence: EncounterConfidence = JSON.parse(str(formData, 'ai_confidence') || '{}');
 
+  // --- AI draft values (what the AI suggested) ---
+  const aiChiefComplaint = str(formData, 'ai_chief_complaint');
+  const aiDiagnosis = str(formData, 'ai_diagnosis');
+  const aiPainLocation = str(formData, 'ai_pain_location') as PainLocation | null;
+  const aiPainScoreNrs = num(formData, 'ai_pain_score_nrs');
+  const aiProcedure = str(formData, 'ai_procedure');
+  const aiPlan = str(formData, 'ai_plan');
+  const aiNotes = str(formData, 'ai_notes');
+
+  // --- Clinician-verified values (what was actually saved) ---
+  const chiefComplaint = str(formData, 'chief_complaint');
+  const diagnosis = str(formData, 'diagnosis');
+  const painLocation = str(formData, 'pain_location') as PainLocation | null;
+  const painScoreNrs = num(formData, 'pain_score_nrs');
+  const procedure = str(formData, 'procedure');
+  const plan = str(formData, 'plan');
+  const notes = str(formData, 'notes');
+
   const { data: encounter, error } = await supabase
     .from('encounters')
     .insert({
@@ -41,22 +59,23 @@ export async function saveEncounter(patientId: string, formData: FormData) {
       source,
       transcript: str(formData, 'transcript'),
 
-      ai_chief_complaint: str(formData, 'ai_chief_complaint'),
-      ai_diagnosis: str(formData, 'ai_diagnosis'),
-      ai_pain_location: str(formData, 'ai_pain_location') as PainLocation | null,
-      ai_pain_score_nrs: num(formData, 'ai_pain_score_nrs'),
-      ai_procedure: str(formData, 'ai_procedure'),
-      ai_plan: str(formData, 'ai_plan'),
-      ai_notes: str(formData, 'ai_notes'),
+      ai_chief_complaint: aiChiefComplaint,
+      ai_diagnosis: aiDiagnosis,
+      ai_pain_location: aiPainLocation,
+      ai_pain_score_nrs: aiPainScoreNrs,
+      ai_procedure: aiProcedure,
+      ai_plan: aiPlan,
+      ai_notes: aiNotes,
       ai_confidence: aiConfidence,
 
-      chief_complaint: str(formData, 'chief_complaint'),
-      diagnosis: str(formData, 'diagnosis'),
-      pain_location: str(formData, 'pain_location') as PainLocation | null,
-      pain_score_nrs: num(formData, 'pain_score_nrs'),
-      procedure: str(formData, 'procedure'),
-      plan: str(formData, 'plan'),
-      notes: str(formData, 'notes'),
+      chief_complaint: chiefComplaint,
+      diagnosis,
+      diagnosis_code: str(formData, 'diagnosis_code'),
+      pain_location: painLocation,
+      pain_score_nrs: painScoreNrs,
+      procedure,
+      plan,
+      notes,
       verified_at: new Date().toISOString(),
 
       pain_mechanism: str(formData, 'pain_mechanism') as PainMechanism | null,
@@ -96,6 +115,45 @@ export async function saveEncounter(patientId: string, formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  // --- CDSS correction logging ---
+  // When AI extraction was used, compare each AI draft field against the
+  // clinician's verified value. Any difference gets logged to cdss_corrections
+  // for later retrieval (RAG) and pattern analysis.
+  if (source !== 'manual') {
+    const diffs: { field_name: string; suggested_value: string | null; final_value: string | null }[] = [];
+
+    const pairs: [string, string | number | null, string | number | null][] = [
+      ['chief_complaint', aiChiefComplaint, chiefComplaint],
+      ['diagnosis', aiDiagnosis, diagnosis],
+      ['pain_location', aiPainLocation, painLocation],
+      ['pain_score_nrs', aiPainScoreNrs, painScoreNrs],
+      ['procedure', aiProcedure, procedure],
+      ['plan', aiPlan, plan],
+    ];
+
+    for (const [field, suggested, final] of pairs) {
+      // Only log when the AI actually proposed something and the clinician changed it
+      if (suggested != null && String(suggested) !== String(final ?? '')) {
+        diffs.push({
+          field_name: field,
+          suggested_value: String(suggested),
+          final_value: final != null ? String(final) : null,
+        });
+      }
+    }
+
+    if (diffs.length > 0) {
+      await supabase.from('cdss_corrections').insert(
+        diffs.map((d) => ({
+          encounter_id: encounter.id,
+          stage: 'extraction' as const,
+          ...d,
+        })),
+      );
+    }
+  }
+
+  // --- Attachment upload ---
   const file = formData.get('attachment');
   if (file instanceof File && file.size > 0) {
     const path = `${user.id}/${encounter.id}/${file.name}`;
@@ -112,6 +170,7 @@ export async function saveEncounter(patientId: string, formData: FormData) {
     }
   }
 
+  // --- Optional next appointment ---
   const scheduleType = str(formData, 'schedule_type') as AppointmentType | null;
   const scheduleDate = str(formData, 'schedule_date');
   if (scheduleType && scheduleDate) {

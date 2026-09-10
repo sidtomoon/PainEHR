@@ -40,12 +40,38 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
               {patient.patient_code} · {[patient.age && `${patient.age}y`, patient.sex, patient.phone].filter(Boolean).join(' · ')}
             </div>
           </div>
-          <Link
-            href={`/patients/${patient.id}/encounters/new`}
-            className="bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 text-sm font-medium"
-          >
-            + Encounter
-          </Link>
+          <div className="flex items-center gap-1.5">
+            {(!encounters || encounters.length === 0) ? (
+              <Link
+                href={`/patients/${patient.id}/encounters/new?type=new`}
+                className="bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 text-sm font-medium"
+              >
+                + Initial Intake
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href={`/patients/${patient.id}/encounters/new?type=followup`}
+                  className="bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm transition"
+                >
+                  + Follow-up
+                </Link>
+                <Link
+                  href={`/patients/${patient.id}/encounters/new?type=procedure`}
+                  className="bg-slate-800 hover:bg-slate-900 text-white rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-sm transition"
+                >
+                  + Procedure
+                </Link>
+                <Link
+                  href={`/patients/${patient.id}/encounters/new?type=new`}
+                  className="text-xs text-slate-500 hover:text-slate-700 px-1 py-1"
+                  title="Record full new intake"
+                >
+                  + New Intake
+                </Link>
+              </>
+            )}
+          </div>
         </div>
 
         {outcomes && outcomes.baseline_date && outcomes.latest_date && outcomes.baseline_date !== outcomes.latest_date && (
@@ -145,6 +171,9 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">
                     {enc.diagnosis || 'No diagnosis recorded'}
+                    {enc.diagnosis_code && (
+                      <span className="ml-1.5 font-mono text-[11px] text-slate-400">[{enc.diagnosis_code}]</span>
+                    )}
                     {enc.pain_score_nrs != null && (
                       <span className="ml-2 tabular-nums font-medium text-slate-700">NRS {enc.pain_score_nrs}/10</span>
                     )}
@@ -152,6 +181,7 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
                 </summary>
                 <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5 text-sm">
                   <DetailRow label="Chief complaint" value={enc.chief_complaint} />
+                  <DetailRow label="Diagnosis code" value={enc.diagnosis_code} />
                   <DetailRow label="Pain location" value={enc.pain_location} />
 
                   {(enc.encounter_type === 'new' || enc.encounter_type === 'followup') && (

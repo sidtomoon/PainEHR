@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 800,
         system: systemPrompt,
         messages: [{ role: 'user', content: contextLines || 'No context provided yet.' }],

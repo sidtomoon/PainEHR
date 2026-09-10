@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { CdssPrompts } from './CdssPrompts';
+import { DiagnosisCodeInput } from './DiagnosisCodeInput';
 import {
   FUNCTIONAL_CHANGES, GOALS_OF_CARE, IMAGING_CONCORDANCES, PAIN_LOCATIONS,
   PAIN_MECHANISMS, PATIENT_GLOBAL_IMPRESSIONS, PROCEDURE_CATEGORIES, PROCEDURE_GUIDANCES,
@@ -26,13 +27,14 @@ type Fields = {
   encounterType: EncounterType;
   chiefComplaint: string;
   diagnosis: string;
+  diagnosisCode: string;
   painLocation: PainLocation | '';
   painScoreNrs: string;
   procedure: string;
   plan: string;
   notes: string;
 
-  // New / follow-up assessment
+  // New assessment fields
   painMechanism: PainMechanism | '';
   functionalImpact: string;
   redFlags: string;
@@ -70,7 +72,7 @@ type Fields = {
 };
 
 const BASE_EMPTY_FIELDS: Fields = {
-  encounterType: 'new', chiefComplaint: '', diagnosis: '', painLocation: '',
+  encounterType: 'new', chiefComplaint: '', diagnosis: '', diagnosisCode: '', painLocation: '',
   painScoreNrs: '', procedure: '', plan: '', notes: '',
   painMechanism: '', functionalImpact: '', redFlags: '', diagnosisConfidence: '',
   imagingConcordance: '', isCancerPain: '', cancerType: '', metastaticDisease: '',
@@ -83,28 +85,38 @@ const BASE_EMPTY_FIELDS: Fields = {
   widespreadPain: '', patientGlobalImpression: '', adverseEvent: '',
 };
 
-type PriorEncounter = Pick<Encounter, 'chief_complaint' | 'diagnosis' | 'pain_location'> | null;
+type PriorEncounter = (Pick<
+  Encounter,
+  'chief_complaint' | 'diagnosis' | 'diagnosis_code' | 'pain_location' | 'pain_score_nrs'
+>) | null;
 
 export function CaptureFlow({
   patientId,
+  patientName,
+  patientCode,
   saveAction,
   priorEncounter,
+  initialType = 'new',
 }: {
   patientId: string;
+  patientName: string;
+  patientCode: string;
   saveAction: (formData: FormData) => void;
   priorEncounter: PriorEncounter;
+  initialType?: EncounterType;
 }) {
-  // Carried forward from the last visit so a busy follow-up doesn't require
-  // retyping the same complaint/diagnosis/location — still editable if it's changed.
-  function withCarryForward(base: Fields): Fields {
-    if (!priorEncounter) return base;
+  function withCarryForward(base: Fields, targetType: EncounterType): Fields {
+    if (!priorEncounter) return { ...base, encounterType: targetType };
     return {
       ...base,
+      encounterType: targetType,
       chiefComplaint: base.chiefComplaint || priorEncounter.chief_complaint || '',
       diagnosis: base.diagnosis || priorEncounter.diagnosis || '',
+      diagnosisCode: base.diagnosisCode || priorEncounter.diagnosis_code || '',
       painLocation: base.painLocation || priorEncounter.pain_location || '',
     };
   }
+
   const [step, setStep] = useState<'capture' | 'review'>('capture');
   const [captureMode, setCaptureMode] = useState<CaptureSource | null>(null);
 
@@ -124,9 +136,12 @@ export function CaptureFlow({
   const [extractError, setExtractError] = useState<string | null>(null);
   const [confidences, setConfidences] = useState<EncounterConfidence>({});
   const [fields, setFields] = useState<Fields>(() =>
-    withCarryForward({ ...BASE_EMPTY_FIELDS, encounterType: priorEncounter ? 'followup' : 'new' }),
+    withCarryForward(BASE_EMPTY_FIELDS, initialType),
   );
   const [encounterDate, setEncounterDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [showEditBaseline, setShowEditBaseline] = useState(false);
+
+  // Scheduling
   const [scheduleType, setScheduleType] = useState<'' | 'followup' | 'procedure'>('');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -202,15 +217,16 @@ export function CaptureFlow({
 
       setFields(withCarryForward({
         ...BASE_EMPTY_FIELDS,
-        encounterType: data.encounter_type || 'new',
+        encounterType: data.encounter_type || fields.encounterType,
         chiefComplaint: data.chief_complaint || '',
         diagnosis: data.diagnosis || '',
+        diagnosisCode: fields.diagnosisCode || '',
         painLocation: data.pain_location || '',
         painScoreNrs: data.pain_score_nrs ?? '',
         procedure: data.procedure || '',
         plan: data.plan || '',
         notes: data.notes || '',
-      }));
+      }, data.encounter_type || fields.encounterType));
       setConfidences(data.confidence || {});
     } catch (e) {
       setExtractError(e instanceof Error ? e.message : 'Something went wrong during extraction. You can still fill fields in manually below.');
@@ -229,23 +245,61 @@ export function CaptureFlow({
   const canExtract = (captureMode === 'photo' && !!photoPreview) || (captureMode === 'voice' && transcript.trim().length > 0);
 
   if (step === 'capture') {
+    const isFollowup = fields.encounterType === 'followup';
+    const isProcedure = fields.encounterType === 'procedure';
+
     return (
       <div className="max-w-2xl mx-auto px-4 pb-24 pt-2 w-full">
-        <Link href={`/patients/${patientId}`} className="text-xs text-slate-400 hover:text-slate-600">← Patient</Link>
-        <h2 className="text-lg font-semibold mt-2 mb-4">New encounter</h2>
+        <Link href={`/patients/${patientId}`} className="text-xs text-slate-400 hover:text-slate-600">
+          ← Patient Chart
+        </Link>
 
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="mt-2 mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">
+              {isFollowup ? 'Record Follow-up' : isProcedure ? 'Record Procedure' : 'New Patient Intake'}
+            </h2>
+            <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+              {patientCode}
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Patient: <strong className="text-slate-700">{patientName}</strong>
+            {priorEncounter?.diagnosis && (
+              <span> · Diagnosis on file: <strong className="text-slate-700">{priorEncounter.diagnosis}</strong></span>
+            )}
+          </p>
+        </div>
+
+        {/* Quick direct entry button for fast clinic OPD */}
+        <div className="mb-4">
+          <button
+            onClick={skipToManualReview}
+            className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-lg py-3 text-sm font-medium flex items-center justify-center gap-2 shadow-sm transition"
+          >
+            <span>📝</span>
+            <span>{isFollowup ? 'Enter Follow-up Data Directly' : isProcedure ? 'Enter Procedure Data Directly' : 'Enter Form Directly'}</span>
+          </button>
+        </div>
+
+        <div className="relative flex py-2 items-center">
+          <div className="flex-grow border-t border-slate-200"></div>
+          <span className="flex-shrink mx-3 text-xs text-slate-400 uppercase tracking-wider font-medium">or capture with AI</span>
+          <div className="flex-grow border-t border-slate-200"></div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 my-3">
           <button
             onClick={() => setCaptureMode('photo')}
-            className={`rounded-lg border px-4 py-4 text-sm font-medium transition ${captureMode === 'photo' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+            className={`rounded-lg border px-4 py-3.5 text-sm font-medium transition ${captureMode === 'photo' ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
           >
-            Photo
+            📷 Photo Note / Rx
           </button>
           <button
             onClick={() => setCaptureMode('voice')}
-            className={`rounded-lg border px-4 py-4 text-sm font-medium transition ${captureMode === 'voice' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+            className={`rounded-lg border px-4 py-3.5 text-sm font-medium transition ${captureMode === 'voice' ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
           >
-            Voice
+            🎙️ Dictate Voice
           </button>
         </div>
 
@@ -253,7 +307,7 @@ export function CaptureFlow({
           <label className="block border-2 border-dashed border-slate-200 rounded-lg py-8 text-center cursor-pointer hover:border-teal-300 transition">
             <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
             {photoPreview ? (
-              <img src={photoPreview} alt="capture preview" className="max-h-64 mx-auto rounded" />
+              <img src={photoPreview} alt="capture preview" className="max-h-64 mx-auto rounded shadow-sm" />
             ) : (
               <div className="text-slate-400 text-sm">Tap to take or choose a photo</div>
             )}
@@ -265,9 +319,9 @@ export function CaptureFlow({
             {speechSupported ? (
               <button
                 onClick={toggleRecording}
-                className={`w-full rounded-lg py-3 text-sm font-medium ${isRecording ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'}`}
+                className={`w-full rounded-lg py-3 text-sm font-medium ${isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-white'}`}
               >
-                {isRecording ? 'Stop recording' : 'Start recording'}
+                {isRecording ? '⏹ Stop recording' : '🎙️ Start recording'}
               </button>
             ) : (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -285,16 +339,13 @@ export function CaptureFlow({
         )}
 
         {captureMode && (
-          <div className="mt-5 space-y-2">
+          <div className="mt-4 space-y-2">
             <button
               disabled={!canExtract || isExtracting}
               onClick={runExtraction}
-              className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-lg py-2.5 text-sm font-medium"
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-lg py-2.5 text-sm font-medium shadow-sm transition"
             >
-              {isExtracting ? 'Extracting…' : 'Extract with AI'}
-            </button>
-            <button onClick={skipToManualReview} className="w-full text-slate-500 text-xs py-1 hover:text-slate-700">
-              Skip AI and enter fields manually
+              {isExtracting ? 'Extracting with Claude AI…' : 'Extract with AI'}
             </button>
           </div>
         )}
@@ -302,18 +353,73 @@ export function CaptureFlow({
     );
   }
 
-  const carriedForwardHint = priorEncounter && fields.encounterType !== 'new'
-    ? <span className="text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase tracking-wide bg-slate-50 text-slate-400 border-slate-200">from last visit</span>
-    : null;
+  const isFollowup = fields.encounterType === 'followup';
+  const isProcedure = fields.encounterType === 'procedure';
+  const isNew = fields.encounterType === 'new';
 
   return (
     <div className="max-w-2xl mx-auto px-4 pb-24 pt-2 w-full">
-      <button onClick={() => setStep('capture')} className="text-xs text-slate-400 hover:text-slate-600">← Capture</button>
-      <h2 className="text-lg font-semibold mt-2 mb-1">Review &amp; verify</h2>
-      <p className="text-xs text-slate-400 mb-4">Nothing is saved to this patient&apos;s record until you confirm it below.</p>
+      <button onClick={() => setStep('capture')} className="text-xs text-slate-400 hover:text-slate-600">
+        ← Change Capture Mode
+      </button>
+
+      <div className="flex items-center justify-between mt-2 mb-2">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">
+            {isFollowup ? 'Follow-up Entry' : isProcedure ? 'Procedure Entry' : 'Initial Assessment Entry'}
+          </h2>
+          <p className="text-xs text-slate-400">
+            {patientName} · <span className="font-mono">{patientCode}</span>
+          </p>
+        </div>
+        <span className="text-xs px-2.5 py-1 rounded bg-teal-50 text-teal-700 border border-teal-200 font-medium uppercase tracking-wide">
+          {fields.encounterType}
+        </span>
+      </div>
 
       {extractError && (
-        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3">{extractError}</div>
+        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mb-3">
+          {extractError}
+        </div>
+      )}
+
+      {/* ── Baseline / Background Context Card for Follow-up & Procedure ── */}
+      {priorEncounter && (isFollowup || isProcedure) && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+              Recorded on Intake / Baseline
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowEditBaseline(!showEditBaseline)}
+              className="text-[11px] text-teal-700 hover:text-teal-900 font-medium"
+            >
+              {showEditBaseline ? 'Hide edit fields' : 'Edit baseline diagnosis / location ✎'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-slate-700 pt-1">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase">Diagnosis:</span>
+              <strong className="font-medium text-slate-900">{fields.diagnosis || priorEncounter.diagnosis || '—'}</strong>
+              {fields.diagnosisCode && (
+                <span className="ml-1 font-mono text-[10px] text-teal-700 bg-teal-50 px-1 py-0.5 rounded border border-teal-200">
+                  {fields.diagnosisCode}
+                </span>
+              )}
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase">Pain Location:</span>
+              <span className="capitalize">{fields.painLocation || priorEncounter.pain_location || '—'}</span>
+            </div>
+            {priorEncounter.pain_score_nrs != null && (
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase">Baseline Pain:</span>
+                <span className="font-semibold text-slate-900">{priorEncounter.pain_score_nrs} / 10</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <form action={saveAction} className="space-y-3">
@@ -327,165 +433,328 @@ export function CaptureFlow({
         <input type="hidden" name="ai_procedure" value={fields.procedure} />
         <input type="hidden" name="ai_plan" value={fields.plan} />
 
+        {/* Preserve carried-forward values in submission */}
+        {(!showEditBaseline && (isFollowup || isProcedure)) && (
+          <>
+            <input type="hidden" name="chief_complaint" value={fields.chiefComplaint} />
+            <input type="hidden" name="diagnosis" value={fields.diagnosis} />
+            <input type="hidden" name="diagnosis_code" value={fields.diagnosisCode} />
+            <input type="hidden" name="pain_location" value={fields.painLocation} />
+          </>
+        )}
+
         {captureMode === 'photo' && photoFile && (
           <HiddenFileInput file={photoFile} />
         )}
 
-        <div>
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Date</label>
-          <input
-            name="encounter_date" type="date" value={encounterDate}
-            onChange={(e) => setEncounterDate(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Encounter type</label>
-          <select
-            name="encounter_type" value={fields.encounterType}
-            onChange={(e) => setFields({ ...fields, encounterType: e.target.value as EncounterType })}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <option value="new">New</option>
-            <option value="followup">Follow-up</option>
-            <option value="procedure">Procedure</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        <VerifiedField label="Chief complaint" name="chief_complaint" value={fields.chiefComplaint} confidence={confidences.chief_complaint}
-          hint={carriedForwardHint} onChange={(v) => setFields({ ...fields, chiefComplaint: v })} />
-        <VerifiedField label="Diagnosis" name="diagnosis" value={fields.diagnosis} confidence={confidences.diagnosis}
-          hint={carriedForwardHint} onChange={(v) => setFields({ ...fields, diagnosis: v })} />
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pain location</label>
-            {confidences.pain_location ? <ConfidenceBadge confidence={confidences.pain_location} /> : carriedForwardHint}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Date</label>
+            <input
+              name="encounter_date" type="date" value={encounterDate}
+              onChange={(e) => setEncounterDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
           </div>
-          <select
-            name="pain_location" value={fields.painLocation}
-            onChange={(e) => setFields({ ...fields, painLocation: e.target.value as PainLocation })}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <option value="">—</option>
-            {PAIN_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
-          </select>
-        </div>
-
-        <VerifiedField label="Pain score (NRS 0–10)" name="pain_score_nrs" value={fields.painScoreNrs} confidence={confidences.pain_score_nrs}
-          onChange={(v) => setFields({ ...fields, painScoreNrs: v })} type="number" />
-
-        <CdssPrompts context={{
-          chiefComplaint: fields.chiefComplaint,
-          diagnosis: fields.diagnosis,
-          painLocation: fields.painLocation,
-          painMechanism: fields.painMechanism,
-          encounterType: fields.encounterType,
-          transcript: captureMode === 'voice' ? transcript : '',
-          filledFields: (Object.entries(fields) as [string, string][])
-            .filter(([, v]) => v !== '' && v != null)
-            .map(([k]) => k),
-        }} />
-
-        <FieldSet title="Outcomes (0–10, leave blank if not assessed)">
-          <div className="grid grid-cols-2 gap-3">
-            <TextField label="Function" name="function_score_0_10" value={fields.functionScore}
-              onChange={(v) => set('functionScore', v)} type="number" />
-            <TextField label="Mood" name="mood_score_0_10" value={fields.moodScore}
-              onChange={(v) => set('moodScore', v)} type="number" />
-            <TextField label="Sleep" name="sleep_score_0_10" value={fields.sleepScore}
-              onChange={(v) => set('sleepScore', v)} type="number" />
-            <TextField label="Quality of life" name="qol_score_0_10" value={fields.qolScore}
-              onChange={(v) => set('qolScore', v)} type="number" />
+          <div>
+            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Encounter type</label>
+            <select
+              name="encounter_type" value={fields.encounterType}
+              onChange={(e) => set('encounterType', e.target.value as EncounterType)}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              <option value="followup">Follow-up</option>
+              <option value="procedure">Procedure</option>
+              <option value="new">New Assessment</option>
+              <option value="other">Other</option>
+            </select>
           </div>
-          {(fields.encounterType === 'new' || fields.encounterType === 'followup') && (
-            <TriField label="Widespread pain?" name="widespread_pain" value={fields.widespreadPain}
-              onChange={(v) => set('widespreadPain', v)} />
-          )}
-          <TextField label="Adverse event" name="adverse_event" value={fields.adverseEvent}
-            onChange={(v) => set('adverseEvent', v)} placeholder="e.g. none" />
-        </FieldSet>
-
-        {(fields.encounterType === 'new' || fields.encounterType === 'followup') && (
-          <FieldSet title="Assessment">
-            <SelectField label="Pain mechanism" name="pain_mechanism" value={fields.painMechanism}
-              onChange={(v) => set('painMechanism', v as Fields['painMechanism'])} options={PAIN_MECHANISMS} />
-            <TextField label="Functional impact" name="functional_impact" value={fields.functionalImpact}
-              onChange={(v) => set('functionalImpact', v)} placeholder="e.g. ADLs limited, sleep affected" />
-            <TextField label="Red flags" name="red_flags" value={fields.redFlags}
-              onChange={(v) => set('redFlags', v)} placeholder="e.g. none, or progressive neuro deficit" />
-            <SelectField label="Diagnosis confidence" name="diagnosis_confidence" value={fields.diagnosisConfidence}
-              onChange={(v) => set('diagnosisConfidence', v as Fields['diagnosisConfidence'])} options={['high', 'medium', 'low']} />
-            <SelectField label="Imaging–symptom concordance" name="imaging_concordance" value={fields.imagingConcordance}
-              onChange={(v) => set('imagingConcordance', v as Fields['imagingConcordance'])} options={IMAGING_CONCORDANCES} />
-            <TriField label="Cancer pain patient?" name="is_cancer_pain" value={fields.isCancerPain}
-              onChange={(v) => set('isCancerPain', v)} />
-            {fields.isCancerPain === 'yes' && (
-              <>
-                <TextField label="Cancer type" name="cancer_type" value={fields.cancerType} onChange={(v) => set('cancerType', v)} />
-                <TriField label="Metastatic disease" name="metastatic_disease" value={fields.metastaticDisease}
-                  onChange={(v) => set('metastaticDisease', v)} />
-                <TextField label="Current oncologic treatment" name="oncologic_treatment" value={fields.oncologicTreatment}
-                  onChange={(v) => set('oncologicTreatment', v)} />
-                <SelectField label="Goal of care" name="goal_of_care" value={fields.goalOfCare}
-                  onChange={(v) => set('goalOfCare', v as Fields['goalOfCare'])} options={GOALS_OF_CARE} />
-              </>
-            )}
-          </FieldSet>
-        )}
-
-        {fields.encounterType === 'procedure' && (
-          <FieldSet title="Procedure details">
-            <VerifiedField label="Procedure name" name="procedure" value={fields.procedure} confidence={confidences.procedure}
-              onChange={(v) => setFields({ ...fields, procedure: v })} />
-            <SelectField label="Procedure category" name="procedure_category" value={fields.procedureCategory}
-              onChange={(v) => set('procedureCategory', v as Fields['procedureCategory'])} options={PROCEDURE_CATEGORIES} />
-            <TextField label="Level(s) / laterality" name="procedure_level_laterality" value={fields.procedureLevelLaterality}
-              onChange={(v) => set('procedureLevelLaterality', v)} placeholder="e.g. L4-L5, right" />
-            <SelectField label="Guidance used" name="procedure_guidance" value={fields.procedureGuidance}
-              onChange={(v) => set('procedureGuidance', v as Fields['procedureGuidance'])} options={PROCEDURE_GUIDANCES} />
-            <TextField label="Drugs used" name="drugs_used" value={fields.drugsUsed} onChange={(v) => set('drugsUsed', v)} />
-            <SelectField label="Procedure intent" name="procedure_intent" value={fields.procedureIntent}
-              onChange={(v) => set('procedureIntent', v as Fields['procedureIntent'])} options={PROCEDURE_INTENTS} />
-            <TextField label="Immediate pain relief (0–10)" name="immediate_pain_relief_nrs" value={fields.immediatePainReliefNrs}
-              onChange={(v) => set('immediatePainReliefNrs', v)} type="number" />
-            <TextField label="Immediate complications" name="immediate_complications" value={fields.immediateComplications}
-              onChange={(v) => set('immediateComplications', v)} placeholder="e.g. none" />
-            <TextField label="Planned follow-up interval" name="planned_followup_interval" value={fields.plannedFollowupInterval}
-              onChange={(v) => set('plannedFollowupInterval', v)} placeholder="e.g. 1 week" />
-          </FieldSet>
-        )}
-
-        {fields.encounterType === 'followup' && (
-          <FieldSet title="Follow-up outcome">
-            <SelectField label="Patient global impression of change" name="patient_global_impression" value={fields.patientGlobalImpression}
-              onChange={(v) => set('patientGlobalImpression', v as Fields['patientGlobalImpression'])} options={PATIENT_GLOBAL_IMPRESSIONS} />
-            <SelectField label="Functional change" name="functional_change" value={fields.functionalChange}
-              onChange={(v) => set('functionalChange', v as Fields['functionalChange'])} options={FUNCTIONAL_CHANGES} />
-            <TriField label="Re-intervention needed?" name="reintervention_needed" value={fields.reinterventionNeeded}
-              onChange={(v) => set('reinterventionNeeded', v)} />
-            <TextField label="Learning point / reflection" name="learning_point" value={fields.learningPoint}
-              onChange={(v) => set('learningPoint', v)} textarea />
-          </FieldSet>
-        )}
-
-        {fields.encounterType !== 'procedure' && (
-          <VerifiedField label="Procedure" name="procedure" value={fields.procedure} confidence={confidences.procedure}
-            onChange={(v) => setFields({ ...fields, procedure: v })} />
-        )}
-        <VerifiedField label="Plan" name="plan" value={fields.plan} confidence={confidences.plan}
-          onChange={(v) => setFields({ ...fields, plan: v })} textarea />
-
-        <div>
-          <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Notes</label>
-          <textarea
-            name="notes" value={fields.notes} rows={3}
-            onChange={(e) => setFields({ ...fields, notes: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
         </div>
 
+        {/* Editable baseline fields if New Encounter OR clinician explicitly toggles "Edit baseline" */}
+        {(isNew || showEditBaseline) && (
+          <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              {isNew ? 'Chief Complaint & Diagnosis' : 'Edit Baseline Information'}
+            </div>
+            <VerifiedField label="Chief complaint" name="chief_complaint" value={fields.chiefComplaint} confidence={confidences.chief_complaint}
+              onChange={(v) => set('chiefComplaint', v)} />
+            <VerifiedField label="Diagnosis" name="diagnosis" value={fields.diagnosis} confidence={confidences.diagnosis}
+              onChange={(v) => set('diagnosis', v)} />
+            <DiagnosisCodeInput value={fields.diagnosisCode} onChange={(v) => set('diagnosisCode', v)} />
+            <div>
+              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Pain location</label>
+              <select
+                name="pain_location" value={fields.painLocation}
+                onChange={(e) => set('painLocation', e.target.value as PainLocation)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="">—</option>
+                {PAIN_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* ── CASE 1: FOLLOW-UP ENTRY (RECORD ONLY FOLLOW-UP DATA) ── */}
+        {isFollowup && (
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Current Pain score (NRS 0–10)
+                </label>
+                {priorEncounter?.pain_score_nrs != null && (
+                  <span className="text-[11px] text-slate-400">
+                    Baseline was <strong className="text-slate-700">{priorEncounter.pain_score_nrs}/10</strong>
+                  </span>
+                )}
+              </div>
+              <input
+                name="pain_score_nrs"
+                type="number"
+                min={0}
+                max={10}
+                required
+                value={fields.painScoreNrs}
+                onChange={(e) => set('painScoreNrs', e.target.value)}
+                placeholder="0 = no pain, 10 = worst imaginable"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <FieldSet title="Follow-up Outcome (Since Last Visit)">
+              <SelectField
+                label="Patient Global Impression of Change (PGIC)"
+                name="patient_global_impression"
+                value={fields.patientGlobalImpression}
+                onChange={(v) => set('patientGlobalImpression', v as Fields['patientGlobalImpression'])}
+                options={PATIENT_GLOBAL_IMPRESSIONS}
+              />
+              <SelectField
+                label="Functional Change"
+                name="functional_change"
+                value={fields.functionalChange}
+                onChange={(v) => set('functionalChange', v as Fields['functionalChange'])}
+                options={FUNCTIONAL_CHANGES}
+              />
+              <TriField
+                label="Re-intervention needed?"
+                name="reintervention_needed"
+                value={fields.reinterventionNeeded}
+                onChange={(v) => set('reinterventionNeeded', v)}
+              />
+              <TextField
+                label="Adverse events / complications"
+                name="adverse_event"
+                value={fields.adverseEvent}
+                onChange={(v) => set('adverseEvent', v)}
+                placeholder="e.g. none"
+              />
+            </FieldSet>
+
+            <FieldSet title="Outcomes (0–10, leave blank if not assessed)">
+              <div className="grid grid-cols-2 gap-3">
+                <TextField label="Function" name="function_score_0_10" value={fields.functionScore}
+                  onChange={(v) => set('functionScore', v)} type="number" />
+                <TextField label="Mood" name="mood_score_0_10" value={fields.moodScore}
+                  onChange={(v) => set('moodScore', v)} type="number" />
+                <TextField label="Sleep" name="sleep_score_0_10" value={fields.sleepScore}
+                  onChange={(v) => set('sleepScore', v)} type="number" />
+                <TextField label="Quality of life" name="qol_score_0_10" value={fields.qolScore}
+                  onChange={(v) => set('qolScore', v)} type="number" />
+              </div>
+            </FieldSet>
+
+            <VerifiedField
+              label="Treatment Plan / Medication Updates"
+              name="plan"
+              value={fields.plan}
+              confidence={confidences.plan}
+              onChange={(v) => set('plan', v)}
+              textarea
+            />
+            <TextField
+              label="Notes / Learning Points"
+              name="notes"
+              value={fields.notes}
+              onChange={(v) => set('notes', v)}
+              textarea
+            />
+          </>
+        )}
+
+        {/* ── CASE 2: PROCEDURE ENTRY (RECORD ONLY PROCEDURE DATA) ── */}
+        {isProcedure && (
+          <>
+            <FieldSet title="Procedure Details">
+              <VerifiedField
+                label="Procedure Name"
+                name="procedure"
+                value={fields.procedure}
+                confidence={confidences.procedure}
+                onChange={(v) => set('procedure', v)}
+              />
+              <SelectField
+                label="Procedure Category"
+                name="procedure_category"
+                value={fields.procedureCategory}
+                onChange={(v) => set('procedureCategory', v as Fields['procedureCategory'])}
+                options={PROCEDURE_CATEGORIES}
+              />
+              <TextField
+                label="Level(s) / Laterality"
+                name="procedure_level_laterality"
+                value={fields.procedureLevelLaterality}
+                onChange={(v) => set('procedureLevelLaterality', v)}
+                placeholder="e.g. L4-L5 right, Bilateral L3-L5"
+              />
+              <SelectField
+                label="Guidance Used"
+                name="procedure_guidance"
+                value={fields.procedureGuidance}
+                onChange={(v) => set('procedureGuidance', v as Fields['procedureGuidance'])}
+                options={PROCEDURE_GUIDANCES}
+              />
+              <TextField
+                label="Drugs Used"
+                name="drugs_used"
+                value={fields.drugsUsed}
+                onChange={(v) => set('drugsUsed', v)}
+                placeholder="e.g. Ropivacaine 0.2% 2ml + Dexamethasone 4mg"
+              />
+              <SelectField
+                label="Procedure Intent"
+                name="procedure_intent"
+                value={fields.procedureIntent}
+                onChange={(v) => set('procedureIntent', v as Fields['procedureIntent'])}
+                options={PROCEDURE_INTENTS}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <TextField
+                  label="Immediate Pain Relief (NRS 0–10)"
+                  name="immediate_pain_relief_nrs"
+                  value={fields.immediatePainReliefNrs}
+                  onChange={(v) => set('immediatePainReliefNrs', v)}
+                  type="number"
+                />
+                <TextField
+                  label="Immediate Complications"
+                  name="immediate_complications"
+                  value={fields.immediateComplications}
+                  onChange={(v) => set('immediateComplications', v)}
+                  placeholder="e.g. none"
+                />
+              </div>
+              <TextField
+                label="Planned Follow-up Interval"
+                name="planned_followup_interval"
+                value={fields.plannedFollowupInterval}
+                onChange={(v) => set('plannedFollowupInterval', v)}
+                placeholder="e.g. 1 week, 2 weeks"
+              />
+            </FieldSet>
+
+            <VerifiedField
+              label="Post-Procedure Plan / Instructions"
+              name="plan"
+              value={fields.plan}
+              confidence={confidences.plan}
+              onChange={(v) => set('plan', v)}
+              textarea
+            />
+            <TextField
+              label="Procedural Notes"
+              name="notes"
+              value={fields.notes}
+              onChange={(v) => set('notes', v)}
+              textarea
+            />
+          </>
+        )}
+
+        {/* ── CASE 3: NEW ASSESSMENT ENTRY (FULL INTAKE) ── */}
+        {isNew && (
+          <>
+            <VerifiedField
+              label="Pain score (NRS 0–10)"
+              name="pain_score_nrs"
+              value={fields.painScoreNrs}
+              confidence={confidences.pain_score_nrs}
+              onChange={(v) => set('painScoreNrs', v)}
+              type="number"
+            />
+
+            <CdssPrompts context={{
+              chiefComplaint: fields.chiefComplaint,
+              diagnosis: fields.diagnosis,
+              painLocation: fields.painLocation,
+              painMechanism: fields.painMechanism,
+              encounterType: fields.encounterType,
+              transcript: captureMode === 'voice' ? transcript : '',
+              filledFields: (Object.entries(fields) as [string, string][])
+                .filter(([, v]) => v !== '' && v != null)
+                .map(([k]) => k),
+            }} />
+
+            <FieldSet title="Assessment">
+              <SelectField label="Pain mechanism" name="pain_mechanism" value={fields.painMechanism}
+                onChange={(v) => set('painMechanism', v as Fields['painMechanism'])} options={PAIN_MECHANISMS} />
+              <TextField label="Functional impact" name="functional_impact" value={fields.functionalImpact}
+                onChange={(v) => set('functionalImpact', v)} placeholder="e.g. ADLs limited, sleep affected" />
+              <TextField label="Red flags" name="red_flags" value={fields.redFlags}
+                onChange={(v) => set('redFlags', v)} placeholder="e.g. none, or progressive neuro deficit" />
+              <SelectField label="Diagnosis confidence" name="diagnosis_confidence" value={fields.diagnosisConfidence}
+                onChange={(v) => set('diagnosisConfidence', v as Fields['diagnosisConfidence'])} options={['high', 'medium', 'low']} />
+              <SelectField label="Imaging–symptom concordance" name="imaging_concordance" value={fields.imagingConcordance}
+                onChange={(v) => set('imagingConcordance', v as Fields['imagingConcordance'])} options={IMAGING_CONCORDANCES} />
+
+              {/* Cancer pain: clearly marked NOT required */}
+              <div className="pt-2 border-t border-slate-100">
+                <TriField
+                  label="Cancer pain patient? (Optional — Yes / No)"
+                  name="is_cancer_pain"
+                  value={fields.isCancerPain}
+                  onChange={(v) => set('isCancerPain', v)}
+                />
+                {fields.isCancerPain === 'yes' && (
+                  <div className="mt-2 pl-3 border-l-2 border-teal-200 space-y-2">
+                    <TextField label="Cancer type" name="cancer_type" value={fields.cancerType} onChange={(v) => set('cancerType', v)} />
+                    <TriField label="Metastatic disease" name="metastatic_disease" value={fields.metastaticDisease}
+                      onChange={(v) => set('metastaticDisease', v)} />
+                    <TextField label="Current oncologic treatment" name="oncologic_treatment" value={fields.oncologicTreatment}
+                      onChange={(v) => set('oncologicTreatment', v)} />
+                    <SelectField label="Goal of care" name="goal_of_care" value={fields.goalOfCare}
+                      onChange={(v) => set('goalOfCare', v as Fields['goalOfCare'])} options={GOALS_OF_CARE} />
+                  </div>
+                )}
+              </div>
+            </FieldSet>
+
+            <FieldSet title="Baseline Outcomes (0–10, leave blank if not assessed)">
+              <div className="grid grid-cols-2 gap-3">
+                <TextField label="Function" name="function_score_0_10" value={fields.functionScore}
+                  onChange={(v) => set('functionScore', v)} type="number" />
+                <TextField label="Mood" name="mood_score_0_10" value={fields.moodScore}
+                  onChange={(v) => set('moodScore', v)} type="number" />
+                <TextField label="Sleep" name="sleep_score_0_10" value={fields.sleepScore}
+                  onChange={(v) => set('sleepScore', v)} type="number" />
+                <TextField label="Quality of life" name="qol_score_0_10" value={fields.qolScore}
+                  onChange={(v) => set('qolScore', v)} type="number" />
+              </div>
+              <TriField label="Widespread pain?" name="widespread_pain" value={fields.widespreadPain}
+                onChange={(v) => set('widespreadPain', v)} />
+              <TextField label="Adverse event" name="adverse_event" value={fields.adverseEvent}
+                onChange={(v) => set('adverseEvent', v)} placeholder="e.g. none" />
+            </FieldSet>
+
+            <VerifiedField label="Treatment Plan" name="plan" value={fields.plan} confidence={confidences.plan}
+              onChange={(v) => set('plan', v)} textarea />
+            <TextField label="Clinical Notes" name="notes" value={fields.notes} onChange={(v) => set('notes', v)} textarea />
+          </>
+        )}
+
+        {/* ── Schedule Next Visit (Available on all visit types) ── */}
         <FieldSet title="Schedule next visit (optional)">
           <div className="grid grid-cols-2 gap-3">
             <SelectField label="Type" name="schedule_type" value={scheduleType}
@@ -509,12 +778,15 @@ export function CaptureFlow({
               />
             </div>
             <TextField label="Location" name="schedule_location" value={scheduleLocation}
-              onChange={setScheduleLocation} placeholder="e.g. OT-2, 2nd floor" />
+              onChange={setScheduleLocation} placeholder="e.g. OPD-1, OT-2" />
           </div>
         </FieldSet>
 
-        <button type="submit" className="w-full mt-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-medium">
-          Save to patient record
+        <button
+          type="submit"
+          className="w-full mt-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-3 text-sm font-medium shadow-sm transition"
+        >
+          {isFollowup ? 'Save Follow-up to Record' : isProcedure ? 'Save Procedure to Record' : 'Save Patient Intake'}
         </button>
       </form>
     </div>
@@ -566,7 +838,7 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 
 function FieldSet({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+    <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-white">
       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</div>
       {children}
     </div>

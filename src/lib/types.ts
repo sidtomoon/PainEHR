@@ -68,6 +68,7 @@ export interface Encounter {
   plan: string | null;
   notes: string | null;
   verified_at: string | null;
+  diagnosis_code: string | null;
 
   // New / follow-up assessment
   pain_mechanism: PainMechanism | null;
@@ -205,3 +206,15 @@ export const FUNCTIONAL_CHANGES: FunctionalChange[] = ['improved', 'static', 'wo
 export const PATIENT_GLOBAL_IMPRESSIONS: PatientGlobalImpression[] = [
   'much_worse', 'worse', 'no_change', 'better', 'much_better',
 ];
+
+export type CdssStage = 'extraction' | 'history' | 'exam' | 'investigation' | 'ddx' | 'treatment';
+
+export interface CdssCorrection {
+  id: string;
+  encounter_id: string;
+  stage: CdssStage;
+  field_name: string;
+  suggested_value: string | null;
+  final_value: string | null;
+  created_at: string;
+}

@@ -22,13 +22,26 @@ export default function NewPatientPage() {
 
       <form action={action} className="space-y-3">
         <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+              UID / Registration No. (optional)
+            </label>
+            <span className="text-[11px] text-slate-400">Leave blank for auto PT-00000X</span>
+          </div>
+          <input
+            name="patient_code"
+            autoFocus
+            placeholder="e.g. CR-12345, clinic UID, or leave blank"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
             Name <span className="text-rose-500">*</span>
           </label>
           <input
             name="name"
             required
-            autoFocus
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
