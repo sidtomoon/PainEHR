@@ -218,3 +218,22 @@ export interface CdssCorrection {
   final_value: string | null;
   created_at: string;
 }
+
+export type LeaveType = 'leave' | 'conference' | 'ot_day' | 'holiday' | 'other';
+
+export interface DoctorLeave {
+  id: string;
+  user_id: string;
+  title: string;
+  leave_type: LeaveType;
+  start_date: string;
+  end_date: string;
+  all_day: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export type AppointmentWithPatient = Appointment & {
+  patient: Pick<Patient, 'id' | 'name' | 'patient_code' | 'phone'>;
+};
+
