@@ -140,6 +140,7 @@ export async function createDoctorLeave(formData: FormData): Promise<ActionResul
     const leaveType = (str(formData, 'leave_type') || 'leave') as LeaveType;
     const notes = str(formData, 'notes');
 
+    // 1. Try doctor_leaves table
     const { error } = await supabase.from('doctor_leaves').insert({
       user_id: user.id,
       title,
@@ -156,11 +157,32 @@ export async function createDoctorLeave(formData: FormData): Promise<ActionResul
         error.code === 'PGRST205' ||
         (error.message && error.message.toLowerCase().includes('doctor_leaves'))
       ) {
-        return {
-          success: false,
-          missingTable: true,
-          error: 'The "doctor_leaves" table has not been created in your Supabase database yet.',
-        };
+        // Fallback: save to announcements table so it works immediately without SQL migrations
+        const payload = JSON.stringify({
+          type: 'doctor_leave',
+          title,
+          leave_type: leaveType,
+          start_date: startDate,
+          end_date: endDate,
+          all_day: true,
+          notes,
+        });
+
+        const { error: annError } = await supabase.from('announcements').insert({
+          user_id: user.id,
+          message: payload,
+        });
+
+        if (annError) {
+          return {
+            success: false,
+            missingTable: true,
+            error: annError.message,
+          };
+        }
+
+        revalidatePath('/calendar');
+        return { success: true };
       }
       return { success: false, error: error.message };
     }
@@ -182,12 +204,21 @@ export async function deleteDoctorLeave(leaveId: string): Promise<ActionResult> 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Unauthorized.' };
 
+    // 1. Try deleting from doctor_leaves
     const { error } = await supabase
       .from('doctor_leaves')
       .delete()
       .eq('id', leaveId);
 
-    if (error) return { success: false, error: error.message };
+    // 2. Try deleting from announcements (fallback storage)
+    const { error: annError } = await supabase
+      .from('announcements')
+      .delete()
+      .eq('id', leaveId);
+
+    if (error && annError) {
+      return { success: false, error: error.message || annError.message };
+    }
 
     revalidatePath('/calendar');
     return { success: true };

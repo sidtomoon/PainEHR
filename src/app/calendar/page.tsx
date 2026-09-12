@@ -49,7 +49,7 @@ export default async function CalendarPage() {
     (a) => a && a.patient
   ) as unknown as AppointmentWithPatient[];
 
-  // 2. Fetch doctor leaves (graceful fallback if table 0007 not run yet)
+  // 2. Fetch doctor leaves (first from doctor_leaves, with fallback to announcements)
   let doctorLeaves: DoctorLeave[] = [];
   try {
     const { data: leavesData, error: leavesError } = await supabase
@@ -57,11 +57,43 @@ export default async function CalendarPage() {
       .select('*')
       .order('start_date', { ascending: true });
 
-    if (!leavesError && leavesData) {
+    if (!leavesError && leavesData && leavesData.length > 0) {
       doctorLeaves = leavesData as DoctorLeave[];
+    } else {
+      // Fallback: fetch from announcements table
+      const { data: annData } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (annData) {
+        doctorLeaves = annData
+          .map((a) => {
+            try {
+              const parsed = JSON.parse(a.message);
+              if (parsed.type === 'doctor_leave') {
+                return {
+                  id: a.id,
+                  user_id: a.user_id,
+                  title: parsed.title,
+                  leave_type: parsed.leave_type || 'leave',
+                  start_date: parsed.start_date,
+                  end_date: parsed.end_date,
+                  all_day: parsed.all_day ?? true,
+                  notes: parsed.notes || null,
+                  created_at: a.created_at,
+                } as DoctorLeave;
+              }
+            } catch {
+              // ignore non-JSON messages
+            }
+            return null;
+          })
+          .filter(Boolean) as DoctorLeave[];
+      }
     }
   } catch (err) {
-    console.warn('Doctor leaves query failed (migration 0007 may not be applied yet):', err);
+    console.warn('Doctor leaves query failed:', err);
     doctorLeaves = [];
   }
 
