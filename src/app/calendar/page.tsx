@@ -2,19 +2,18 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Header } from '@/app/components/Header';
 import { CalendarClient } from './CalendarClient';
+import { getCurrentUser } from '@/lib/auth-roles';
 import type { AppointmentWithPatient, DoctorLeave, Patient } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CalendarPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
     redirect('/login');
   }
+
+  const supabase = await createClient();
 
   // 1. Fetch appointments with patient details
   const { data: rawAppointments, error: appointmentsError } = await supabase
@@ -82,6 +81,7 @@ export default async function CalendarPage() {
           initialAppointments={appointments}
           initialDoctorLeaves={doctorLeaves}
           patients={patients}
+          userRole={currentUser.role}
         />
       </main>
     </>

@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Header } from '@/app/components/Header';
+import { requireAdmin } from '@/lib/auth-roles';
 
 export default async function ExportPage() {
+  await requireAdmin();
   const supabase = await createClient();
 
   const { count: consentedCount } = await supabase

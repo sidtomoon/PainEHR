@@ -100,7 +100,10 @@ export async function deleteAppointment(appointmentId: string) {
   return { success: true };
 }
 
+import { requireAdmin } from '@/lib/auth-roles';
+
 export async function createDoctorLeave(formData: FormData) {
+  await requireAdmin();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
@@ -137,6 +140,7 @@ export async function createDoctorLeave(formData: FormData) {
 }
 
 export async function deleteDoctorLeave(leaveId: string) {
+  await requireAdmin();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');

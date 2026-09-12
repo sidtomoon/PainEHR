@@ -237,3 +237,13 @@ export type AppointmentWithPatient = Appointment & {
   patient: Pick<Patient, 'id' | 'name' | 'patient_code' | 'phone'>;
 };
 
+export type UserRole = 'admin' | 'data_entry';
+
+export interface ClinicUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  displayName: string;
+}
+
+

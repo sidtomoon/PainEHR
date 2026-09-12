@@ -6,12 +6,13 @@ import {
   createAppointment, updateAppointmentStatus, rescheduleAppointment, deleteAppointment,
   createDoctorLeave, deleteDoctorLeave,
 } from './actions';
-import type { AppointmentStatus, AppointmentType, AppointmentWithPatient, DoctorLeave, LeaveType, Patient } from '@/lib/types';
+import type { AppointmentStatus, AppointmentType, AppointmentWithPatient, DoctorLeave, LeaveType, Patient, UserRole } from '@/lib/types';
 
 interface CalendarClientProps {
   initialAppointments: AppointmentWithPatient[];
   initialDoctorLeaves: DoctorLeave[];
   patients: Pick<Patient, 'id' | 'name' | 'patient_code' | 'phone'>[];
+  userRole?: UserRole;
 }
 
 const MONTH_NAMES = [
@@ -25,6 +26,7 @@ export function CalendarClient({
   initialAppointments,
   initialDoctorLeaves,
   patients,
+  userRole = 'admin',
 }: CalendarClientProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -169,13 +171,15 @@ export function CalendarClient({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowLeaveModal(true)}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition flex items-center gap-1.5"
-          >
-            <span>🏖️</span>
-            <span>+ Mark Doctor Leave</span>
-          </button>
+          {userRole === 'admin' && (
+            <button
+              onClick={() => setShowLeaveModal(true)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition flex items-center gap-1.5"
+            >
+              <span>🏖️</span>
+              <span>+ Mark Doctor Leave</span>
+            </button>
+          )}
           <button
             onClick={() => setShowBookModal(true)}
             className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white shadow-sm transition flex items-center gap-1.5"
@@ -397,12 +401,14 @@ export function CalendarClient({
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDeleteLeave(l.id)}
-                  className="text-xs text-amber-700 hover:text-amber-950 px-2 py-1 hover:underline"
-                >
-                  Remove Block
-                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={() => handleDeleteLeave(l.id)}
+                    className="text-xs text-amber-700 hover:text-amber-950 px-2 py-1 hover:underline"
+                  >
+                    Remove Block
+                  </button>
+                )}
               </div>
             ))}
           </div>
