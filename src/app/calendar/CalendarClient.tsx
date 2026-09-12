@@ -575,11 +575,11 @@ function BookAppointmentModal({
   async function handleSubmit(formData: FormData) {
     setErrorMsg(null);
     startTransition(async () => {
-      try {
-        await createAppointment(formData);
+      const res = await createAppointment(formData);
+      if (res.success) {
         onClose();
-      } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'Failed to book appointment.');
+      } else {
+        setErrorMsg(res.error || 'Failed to book appointment.');
       }
     });
   }
@@ -729,18 +729,54 @@ function DoctorLeaveModal({
   onClose: () => void;
 }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [missingTable, setMissingTable] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const SQL_MIGRATION = `-- Run in Supabase SQL Editor: https://supabase.com/dashboard/project/xwvfjqaraeotigztaenj/sql/new
+CREATE TABLE IF NOT EXISTS doctor_leaves (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) DEFAULT auth.uid(),
+  title text NOT NULL,
+  leave_type text NOT NULL DEFAULT 'leave',
+  start_date date NOT NULL,
+  end_date date NOT NULL,
+  all_day boolean NOT NULL DEFAULT true,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE doctor_leaves ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'doctor_leaves' AND policyname = 'manage doctor_leaves'
+  ) THEN
+    CREATE POLICY "manage doctor_leaves" ON doctor_leaves FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;`;
 
   async function handleSubmit(formData: FormData) {
     setErrorMsg(null);
+    setMissingTable(false);
     startTransition(async () => {
-      try {
-        await createDoctorLeave(formData);
+      const res = await createDoctorLeave(formData);
+      if (res.success) {
         onClose();
-      } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'Failed to record leave.');
+      } else {
+        if (res.missingTable) {
+          setMissingTable(true);
+        }
+        setErrorMsg(res.error || 'Failed to record leave.');
       }
     });
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(SQL_MIGRATION);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   }
 
   return (
@@ -754,11 +790,33 @@ function DoctorLeaveModal({
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-sm">✕</button>
         </div>
 
-        {errorMsg && (
+        {missingTable ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 space-y-2 mb-3">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-950">
+              <span>⚠️</span>
+              <span>1-Time Database Setup Required</span>
+            </div>
+            <p className="text-amber-800">
+              The <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">doctor_leaves</code> table hasn&apos;t been created in your Supabase project yet.
+            </p>
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="bg-amber-800 hover:bg-amber-900 text-white font-medium px-3 py-1.5 rounded text-[11px] transition shadow-xs flex items-center gap-1.5"
+              >
+                <span>{copied ? '✓ Copied!' : '📋 Copy SQL Script to Clipboard'}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-700">
+              Open <a href="https://supabase.com/dashboard/project/xwvfjqaraeotigztaenj/sql/new" target="_blank" rel="noreferrer" className="underline font-semibold text-amber-900">Supabase SQL Editor ↗</a>, paste and click <strong>Run</strong>. Once run, leaves will save immediately!
+            </p>
+          </div>
+        ) : errorMsg ? (
           <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5 mb-3">
             {errorMsg}
           </div>
-        )}
+        ) : null}
 
         <form action={handleSubmit} className="space-y-3">
           <div>
@@ -867,11 +925,18 @@ function RescheduleModal({
   const [location, setLocation] = useState(appointment.location || '');
   const [isPending, startTransition] = useTransition();
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   async function handleReschedule(e: React.FormEvent) {
     e.preventDefault();
+    setErrorMsg(null);
     startTransition(async () => {
-      await rescheduleAppointment(appointment.id, date, time, location);
-      onClose();
+      const res = await rescheduleAppointment(appointment.id, date, time, location);
+      if (res.success) {
+        onClose();
+      } else {
+        setErrorMsg(res.error || 'Failed to reschedule.');
+      }
     });
   }
 
