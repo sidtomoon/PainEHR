@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { CdssPrompts } from './CdssPrompts';
 import { DiagnosisCodeInput } from './DiagnosisCodeInput';
 import { DirectedHistorySection } from './DirectedHistorySection';
-import { matchClinicalRule } from '@/lib/clinical-decision-rules';
+import {
+  matchClinicalRule,
+  isCancerDiagnosis,
+  shouldCheckWidespreadPain,
+  PAIN_SCORE_OPTIONS,
+  FUNCTIONAL_IMPACT_OPTIONS,
+} from '@/lib/clinical-decision-rules';
 import {
   FUNCTIONAL_CHANGES, GOALS_OF_CARE, IMAGING_CONCORDANCES, PAIN_LOCATIONS,
   PAIN_MECHANISMS, PATIENT_GLOBAL_IMPRESSIONS, PROCEDURE_CATEGORIES, PROCEDURE_GUIDANCES,
@@ -156,6 +162,24 @@ export function CaptureFlow({
   }
 
   const activeRule = matchClinicalRule(fields.diagnosisCode, fields.diagnosis);
+  const isCancerDetected = isCancerDiagnosis(fields.diagnosisCode, fields.diagnosis);
+  const isWidespreadCandidate = shouldCheckWidespreadPain(fields.diagnosisCode, fields.diagnosis);
+
+  const [dismissCancerPrompt, setDismissCancerPrompt] = useState(false);
+  const [manualShowCancer, setManualShowCancer] = useState(false);
+  const [manualShowWidespread, setManualShowWidespread] = useState(false);
+
+  // Auto-flag cancer pain when detected from initial diagnosis
+  useEffect(() => {
+    if (isCancerDetected && !dismissCancerPrompt) {
+      if (fields.isCancerPain !== 'yes') {
+        set('isCancerPain', 'yes');
+      }
+    }
+  }, [isCancerDetected, dismissCancerPrompt, fields.isCancerPain]);
+
+  const showCancerSection = (isCancerDetected && !dismissCancerPrompt) || manualShowCancer || fields.isCancerPain === 'yes';
+  const showWidespreadSection = isWidespreadCandidate || manualShowWidespread || fields.widespreadPain === 'yes';
 
   // Auto-align location when a diagnosis matches a clinical rule
   useEffect(() => {
@@ -555,8 +579,8 @@ export function CaptureFlow({
                     if (redFlagsSummary) {
                       set('redFlags', redFlagsSummary);
                     }
-                    if (histSummary && (!fields.functionalImpact || fields.functionalImpact.trim() === '')) {
-                      set('functionalImpact', histSummary);
+                    if (histSummary && (!fields.notes || fields.notes.trim() === '')) {
+                      set('notes', histSummary);
                     }
                   }}
                 />
@@ -579,17 +603,20 @@ export function CaptureFlow({
                   </span>
                 )}
               </div>
-              <input
+              <select
                 name="pain_score_nrs"
-                type="number"
-                min={0}
-                max={10}
                 required
                 value={fields.painScoreNrs}
                 onChange={(e) => set('painScoreNrs', e.target.value)}
-                placeholder="0 = no pain, 10 = worst imaginable"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              />
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+              >
+                <option value="">— Select Pain Score (NRS 0–10) —</option>
+                {PAIN_SCORE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <FieldSet title="Follow-up Outcome (Since Last Visit)">
@@ -745,14 +772,30 @@ export function CaptureFlow({
         {/* ── CASE 3: NEW ASSESSMENT ENTRY (FULL INTAKE) ── */}
         {isNew && (
           <>
-            <VerifiedField
-              label="Pain score (NRS 0–10)"
-              name="pain_score_nrs"
-              value={fields.painScoreNrs}
-              confidence={confidences.pain_score_nrs}
-              onChange={(v) => set('painScoreNrs', v)}
-              type="number"
-            />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Pain score (NRS 0–10)
+                </label>
+                {confidences.pain_score_nrs && (
+                  <ConfidenceBadge confidence={confidences.pain_score_nrs} />
+                )}
+              </div>
+              <select
+                name="pain_score_nrs"
+                required
+                value={fields.painScoreNrs}
+                onChange={(e) => set('painScoreNrs', e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+              >
+                <option value="">— Select Pain Score (NRS 0–10) —</option>
+                {PAIN_SCORE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <CdssPrompts context={{
               chiefComplaint: fields.chiefComplaint,
@@ -769,52 +812,156 @@ export function CaptureFlow({
             <FieldSet title="Assessment">
               <SelectField label="Pain mechanism" name="pain_mechanism" value={fields.painMechanism}
                 onChange={(v) => set('painMechanism', v as Fields['painMechanism'])} options={PAIN_MECHANISMS} />
-              <TextField label="Functional impact" name="functional_impact" value={fields.functionalImpact}
-                onChange={(v) => set('functionalImpact', v)} placeholder="e.g. ADLs limited, sleep affected" />
-              <TextField label="Red flags" name="red_flags" value={fields.redFlags}
-                onChange={(v) => set('redFlags', v)} placeholder="e.g. none, or progressive neuro deficit" />
               <SelectField label="Diagnosis confidence" name="diagnosis_confidence" value={fields.diagnosisConfidence}
                 onChange={(v) => set('diagnosisConfidence', v as Fields['diagnosisConfidence'])} options={['high', 'medium', 'low']} />
               <SelectField label="Imaging–symptom concordance" name="imaging_concordance" value={fields.imagingConcordance}
                 onChange={(v) => set('imagingConcordance', v as Fields['imagingConcordance'])} options={IMAGING_CONCORDANCES} />
+              <TextField label="Red flags" name="red_flags" value={fields.redFlags}
+                onChange={(v) => set('redFlags', v)} placeholder="e.g. none, or progressive neuro deficit" />
 
-              {/* Cancer pain: clearly marked NOT required */}
-              <div className="pt-2 border-t border-slate-100">
-                <TriField
-                  label="Cancer pain patient? (Optional — Yes / No)"
-                  name="is_cancer_pain"
-                  value={fields.isCancerPain}
-                  onChange={(v) => set('isCancerPain', v)}
-                />
-                {fields.isCancerPain === 'yes' && (
-                  <div className="mt-2 pl-3 border-l-2 border-teal-200 space-y-2">
-                    <TextField label="Cancer type" name="cancer_type" value={fields.cancerType} onChange={(v) => set('cancerType', v)} />
-                    <TriField label="Metastatic disease" name="metastatic_disease" value={fields.metastaticDisease}
-                      onChange={(v) => set('metastaticDisease', v)} />
-                    <TextField label="Current oncologic treatment" name="oncologic_treatment" value={fields.oncologicTreatment}
-                      onChange={(v) => set('oncologicTreatment', v)} />
-                    <SelectField label="Goal of care" name="goal_of_care" value={fields.goalOfCare}
-                      onChange={(v) => set('goalOfCare', v as Fields['goalOfCare'])} options={GOALS_OF_CARE} />
+              {/* Cancer pain: auto-detected from initial diagnosis */}
+              {showCancerSection ? (
+                <div className="pt-2 border-t border-teal-100 bg-teal-50/50 -mx-3 px-3 py-3 rounded-b-lg space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-900">
+                      <span>🎗️</span>
+                      <span>Cancer Pain Patient</span>
+                      {isCancerDetected && (
+                        <span className="text-[10px] bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded font-medium">
+                          Auto-detected from diagnosis
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDismissCancerPrompt(true);
+                        setManualShowCancer(false);
+                        set('isCancerPain', 'no');
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-rose-600 underline transition"
+                    >
+                      Clear / Non-cancer
+                    </button>
                   </div>
-                )}
-              </div>
+                  <input type="hidden" name="is_cancer_pain" value={fields.isCancerPain || 'yes'} />
+                  <TextField label="Cancer type / primary site" name="cancer_type" value={fields.cancerType}
+                    onChange={(v) => set('cancerType', v)} placeholder="e.g. Ca Breast, Lung, Multiple Myeloma" />
+                  <TriField label="Metastatic disease" name="metastatic_disease" value={fields.metastaticDisease}
+                    onChange={(v) => set('metastaticDisease', v)} />
+                  <TextField label="Current oncologic treatment" name="oncologic_treatment" value={fields.oncologicTreatment}
+                    onChange={(v) => set('oncologicTreatment', v)} placeholder="e.g. Chemotherapy, Radiotherapy, Hormone therapy, Palliative" />
+                  <SelectField label="Goal of care" name="goal_of_care" value={fields.goalOfCare}
+                    onChange={(v) => set('goalOfCare', v as Fields['goalOfCare'])} options={GOALS_OF_CARE} />
+                </div>
+              ) : (
+                <div className="pt-1 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualShowCancer(true);
+                      setDismissCancerPrompt(false);
+                      set('isCancerPain', 'yes');
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-teal-700 transition"
+                  >
+                    + Add oncologic / cancer pain details
+                  </button>
+                </div>
+              )}
             </FieldSet>
 
-            <FieldSet title="Baseline Outcomes (0–10, leave blank if not assessed)">
-              <div className="grid grid-cols-2 gap-3">
-                <TextField label="Function" name="function_score_0_10" value={fields.functionScore}
-                  onChange={(v) => set('functionScore', v)} type="number" />
-                <TextField label="Mood" name="mood_score_0_10" value={fields.moodScore}
-                  onChange={(v) => set('moodScore', v)} type="number" />
-                <TextField label="Sleep" name="sleep_score_0_10" value={fields.sleepScore}
-                  onChange={(v) => set('sleepScore', v)} type="number" />
-                <TextField label="Quality of life" name="qol_score_0_10" value={fields.qolScore}
-                  onChange={(v) => set('qolScore', v)} type="number" />
+            <FieldSet title="Baseline Outcomes & Functional Impact">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+                  Functional Impact (Clinical Grade)
+                </label>
+                <select
+                  name="functional_impact"
+                  value={fields.functionalImpact}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    set('functionalImpact', val);
+                    const matchedOpt = FUNCTIONAL_IMPACT_OPTIONS.find((o) => o.value === val);
+                    if (matchedOpt && (!fields.functionScore || fields.functionScore === '')) {
+                      set('functionScore', matchedOpt.score);
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">— Select Functional Impact Grade —</option>
+                  {FUNCTIONAL_IMPACT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Selecting a clinical grade automatically aligns the baseline Function score below.
+                </p>
               </div>
-              <TriField label="Widespread pain?" name="widespread_pain" value={fields.widespreadPain}
-                onChange={(v) => set('widespreadPain', v)} />
-              <TextField label="Adverse event" name="adverse_event" value={fields.adverseEvent}
-                onChange={(v) => set('adverseEvent', v)} placeholder="e.g. none" />
+
+              <div className="pt-2 border-t border-slate-100">
+                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-2">
+                  Outcome Scores (0–10, leave blank if not assessed)
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    label="Function (0 = normal, 10 = disabled)"
+                    name="function_score_0_10"
+                    value={fields.functionScore}
+                    onChange={(v) => set('functionScore', v)}
+                    type="number"
+                  />
+                  <TextField
+                    label="Mood (0 = best, 10 = severe distress)"
+                    name="mood_score_0_10"
+                    value={fields.moodScore}
+                    onChange={(v) => set('moodScore', v)}
+                    type="number"
+                  />
+                  <TextField
+                    label="Sleep (0 = peaceful, 10 = severe insomnia)"
+                    name="sleep_score_0_10"
+                    value={fields.sleepScore}
+                    onChange={(v) => set('sleepScore', v)}
+                    type="number"
+                  />
+                  <TextField
+                    label="Quality of Life (0 = excellent, 10 = poorest)"
+                    name="qol_score_0_10"
+                    value={fields.qolScore}
+                    onChange={(v) => set('qolScore', v)}
+                    type="number"
+                  />
+                </div>
+              </div>
+
+              {showWidespreadSection ? (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-teal-700 font-medium">
+                      Screening active for {activeRule?.name || 'generalized/arthritic condition'}
+                    </span>
+                  </div>
+                  <TriField
+                    label="Widespread pain?"
+                    name="widespread_pain"
+                    value={fields.widespreadPain}
+                    onChange={(v) => set('widespreadPain', v)}
+                  />
+                </div>
+              ) : (
+                <div className="pt-1 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setManualShowWidespread(true)}
+                    className="text-[11px] text-slate-400 hover:text-teal-700 transition"
+                  >
+                    + Check for widespread pain
+                  </button>
+                </div>
+              )}
             </FieldSet>
 
             <VerifiedField label="Treatment Plan" name="plan" value={fields.plan} confidence={confidences.plan}

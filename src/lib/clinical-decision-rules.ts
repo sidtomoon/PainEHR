@@ -402,3 +402,86 @@ export function matchClinicalRule(diagnosisCode: string = '', diagnosisText: str
 
   return null;
 }
+
+/**
+ * Detects whether a diagnosis code or diagnosis text indicates cancer / malignancy.
+ */
+export function isCancerDiagnosis(diagnosisCode: string = '', diagnosisText: string = ''): boolean {
+  const code = diagnosisCode.trim().toUpperCase();
+  const text = diagnosisText.trim().toLowerCase();
+  if (!code && !text) return false;
+
+  // ICD-11 Chronic cancer pain: MG30.1, MG30.10, MG30.11
+  // Neoplasms chapters (2A.. to 2F.., C00-D49)
+  const cancerCodes = [
+    'MG30.1', '2A', '2B', '2C', '2D', '2E', '2F',
+    'C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'D0', 'D3', 'D4',
+  ];
+  if (cancerCodes.some((c) => code.startsWith(c))) return true;
+
+  const cancerKeywords = [
+    'cancer', 'carcinoma', 'malignan', 'tumor', 'tumour', 'oncolog', 'metast',
+    'lymphoma', 'leukemia', 'melanoma', 'sarcoma', 'myeloma', 'chemotherapy',
+    'radiotherapy', 'palliative', 'neoplasm', 'ca breast', 'ca lung', 'ca colon',
+    'ca prostate', 'ca cervix', 'ca pancreas', 'ca stomach', 'ca oral', 'ca tongue',
+  ];
+  return cancerKeywords.some((kw) => text.includes(kw));
+}
+
+/**
+ * Checks whether a diagnosis warrants screening for Chronic Widespread Pain (CWP / Fibromyalgia / Myofascial / Osteoporosis / Polyarthritis).
+ * Focal conditions like low back pain, isolated knee OA, or cervical radiculopathy return false.
+ */
+export function shouldCheckWidespreadPain(diagnosisCode: string = '', diagnosisText: string = ''): boolean {
+  const code = diagnosisCode.trim().toUpperCase();
+  const text = diagnosisText.trim().toLowerCase();
+  if (!code && !text) return false;
+
+  // CWP / Fibromyalgia / Rheumatoid & Polyarthritis / Osteoporosis codes
+  const widespreadCodes = [
+    'MG30.0', 'MG30.00', 'FB56.4', 'FA20', 'FA21', 'FA22', 'FA23', 'FA24', 'FA25', 'FB80', 'FB81', 'FB82', 'FB83',
+  ];
+  if (widespreadCodes.some((c) => code.startsWith(c))) return true;
+
+  const widespreadKeywords = [
+    'widespread',
+    'fibromyalgia',
+    'myofascial',
+    'osteoporosis',
+    'osteopeni',
+    'polyarthr',
+    'rheumatoid',
+    'ankylosing',
+    'spondyloarthr',
+    'central sensit',
+    'cwp',
+    'hypermobil',
+    'ehlers-danlos',
+    'polymyalgia',
+  ];
+
+  return widespreadKeywords.some((kw) => text.includes(kw));
+}
+
+export const PAIN_SCORE_OPTIONS = [
+  { value: '0', label: '0 - No pain' },
+  { value: '1', label: '1 - Mild (barely noticeable)' },
+  { value: '2', label: '2 - Mild (noticeable, easily tolerated)' },
+  { value: '3', label: '3 - Mild (tolerable, but noticeable)' },
+  { value: '4', label: '4 - Moderate (interferes with chores / tasks)' },
+  { value: '5', label: '5 - Moderate (moderate pain, hard to ignore)' },
+  { value: '6', label: '6 - Moderate (interferes with concentration / work)' },
+  { value: '7', label: '7 - Severe (disabling, hard to perform tasks)' },
+  { value: '8', label: '8 - Severe (major limitation, unable to work)' },
+  { value: '9', label: '9 - Severe (excruciating, unable to function)' },
+  { value: '10', label: '10 - Worst pain imaginable / Bedridden' },
+];
+
+export const FUNCTIONAL_IMPACT_OPTIONS = [
+  { value: 'Normal (No functional limitation)', label: 'Normal — No limitation in daily activities or work', score: '0' },
+  { value: 'Mild (Strenuous activities/sports limited)', label: 'Mild — Normal daily routine, strenuous activities/sports limited', score: '2' },
+  { value: 'Moderate (ADLs & work limited)', label: 'Moderate — Difficulty with occupational duties, housework & chores', score: '5' },
+  { value: 'Severe (Self-care difficult, major disability)', label: 'Severe — Difficulty with basic self-care ADLs, largely homebound', score: '8' },
+  { value: 'Bedridden / Completely dependent', label: 'Bedridden / Wheelchair-bound — Completely dependent for care', score: '10' },
+];
+
