@@ -13,9 +13,11 @@ import type { Icd11Code } from '@/lib/icd11-pain-codes';
 export function DiagnosisCodeInput({
   value,
   onChange,
+  onSelect,
 }: {
   value: string;
   onChange: (code: string) => void;
+  onSelect?: (code: Icd11Code) => void;
 }) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -53,6 +55,7 @@ export function DiagnosisCodeInput({
     const display = `${code.code} ${code.label}`;
     setQuery(display);
     onChange(code.code);
+    onSelect?.(code);
     setOpen(false);
   }
 

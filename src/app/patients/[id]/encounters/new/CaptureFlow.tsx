@@ -1,9 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CdssPrompts } from './CdssPrompts';
 import { DiagnosisCodeInput } from './DiagnosisCodeInput';
+import { DirectedHistorySection } from './DirectedHistorySection';
+import { matchClinicalRule } from '@/lib/clinical-decision-rules';
 import {
   FUNCTIONAL_CHANGES, GOALS_OF_CARE, IMAGING_CONCORDANCES, PAIN_LOCATIONS,
   PAIN_MECHANISMS, PATIENT_GLOBAL_IMPRESSIONS, PROCEDURE_CATEGORIES, PROCEDURE_GUIDANCES,
@@ -140,6 +142,8 @@ export function CaptureFlow({
   );
   const [encounterDate, setEncounterDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [showEditBaseline, setShowEditBaseline] = useState(false);
+  const [showAllLocations, setShowAllLocations] = useState(false);
+  const [directedHistoryAnswers, setDirectedHistoryAnswers] = useState<Record<string, string[]>>({});
 
   // Scheduling
   const [scheduleType, setScheduleType] = useState<'' | 'followup' | 'procedure'>('');
@@ -150,6 +154,19 @@ export function CaptureFlow({
   function set<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((f) => ({ ...f, [key]: value }));
   }
+
+  const activeRule = matchClinicalRule(fields.diagnosisCode, fields.diagnosis);
+
+  // Auto-align location when a diagnosis matches a clinical rule
+  useEffect(() => {
+    if (activeRule && (!fields.painLocation || !activeRule.directedLocations.includes(fields.painLocation as PainLocation))) {
+      set('painLocation', activeRule.defaultLocation);
+    }
+  }, [activeRule?.id]);
+
+  const displayedLocations = activeRule && !showAllLocations
+    ? activeRule.directedLocations
+    : PAIN_LOCATIONS;
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -481,18 +498,70 @@ export function CaptureFlow({
               onChange={(v) => set('chiefComplaint', v)} />
             <VerifiedField label="Diagnosis" name="diagnosis" value={fields.diagnosis} confidence={confidences.diagnosis}
               onChange={(v) => set('diagnosis', v)} />
-            <DiagnosisCodeInput value={fields.diagnosisCode} onChange={(v) => set('diagnosisCode', v)} />
+            <DiagnosisCodeInput
+              value={fields.diagnosisCode}
+              onChange={(v) => set('diagnosisCode', v)}
+              onSelect={(code) => {
+                if (!fields.diagnosis || fields.diagnosis.trim() === '') {
+                  set('diagnosis', code.label);
+                }
+              }}
+            />
             <div>
-              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Pain location</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide">
+                  Pain location
+                  {activeRule && (
+                    <span className="ml-1.5 font-normal text-[11px] text-teal-600 normal-case">
+                      (directed for {activeRule.name})
+                    </span>
+                  )}
+                </label>
+                {activeRule && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllLocations((v) => !v)}
+                    className="text-[11px] text-slate-400 hover:text-teal-700 underline transition"
+                  >
+                    {showAllLocations ? 'Show directed options only' : 'Show all body locations'}
+                  </button>
+                )}
+              </div>
               <select
-                name="pain_location" value={fields.painLocation}
+                name="pain_location"
+                value={fields.painLocation}
                 onChange={(e) => set('painLocation', e.target.value as PainLocation)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
-                <option value="">—</option>
-                {PAIN_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                <option value="">— Select pain location —</option>
+                {displayedLocations.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {activeRule?.locationLabels[loc] || loc}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {/* Directed Clinical History Checklist based on Diagnosis Code */}
+            {activeRule && (
+              <div className="pt-2">
+                <DirectedHistorySection
+                  rule={activeRule}
+                  answers={directedHistoryAnswers}
+                  onAnswerChange={(qid, ans) => {
+                    setDirectedHistoryAnswers((prev) => ({ ...prev, [qid]: ans }));
+                  }}
+                  onAutoSyncSummary={(histSummary, redFlagsSummary) => {
+                    if (redFlagsSummary) {
+                      set('redFlags', redFlagsSummary);
+                    }
+                    if (histSummary && (!fields.functionalImpact || fields.functionalImpact.trim() === '')) {
+                      set('functionalImpact', histSummary);
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 
