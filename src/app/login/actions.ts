@@ -73,14 +73,14 @@ export async function verifyCode(_prevState: unknown, formData: FormData) {
 }
 
 /**
- * 1-Click Login for Lead Doctor / Admin (Dr. Varun)
+ * 1-Click Login for Lead Doctor / Admin (sidtomoon@gmail.com)
  */
 export async function devLogin() {
   const serviceClient = createServiceClient();
   const origin = await getOrigin();
   const { data, error } = await serviceClient.auth.admin.generateLink({
     type: 'magiclink',
-    email: 'drvarunsinglapgi@gmail.com',
+    email: 'sidtomoon@gmail.com',
     options: { redirectTo: `${origin}/auth/confirm` },
   });
 

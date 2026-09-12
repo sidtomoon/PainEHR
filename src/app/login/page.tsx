@@ -73,7 +73,7 @@ export default function LoginPage() {
                 className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-lg py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-sm"
               >
                 <span>⚡</span>
-                <span>1-Click Login as Dr. Varun (Admin)</span>
+                <span>1-Click Login as Admin (sidtomoon@gmail.com)</span>
               </button>
             </form>
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
                   name="email"
                   type="email"
                   required
-                  defaultValue="drvarunsinglapgi@gmail.com"
+                  defaultValue="sidtomoon@gmail.com"
                   placeholder="admin@example.com"
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />

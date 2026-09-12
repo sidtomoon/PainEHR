@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { ClinicUser, UserRole } from '@/lib/types';
 
-export const ADMIN_EMAIL = 'drvarunsinglapgi@gmail.com';
+export const ADMIN_EMAILS = ['sidtomoon@gmail.com', 'drvarunsinglapgi@gmail.com'];
+export const ADMIN_EMAIL = 'sidtomoon@gmail.com';
 
 /**
  * Retrieves the currently authenticated clinic user with their resolved role.
@@ -44,7 +45,7 @@ export async function getCurrentUser(): Promise<ClinicUser | null> {
 
   // 2. Fallback based on metadata or hardcoded admin email
   const isAdmin =
-    email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ||
+    ADMIN_EMAILS.some((e) => e.toLowerCase() === email.toLowerCase()) ||
     metadata.role === 'admin';
 
   const role: UserRole = isAdmin ? 'admin' : 'data_entry';
