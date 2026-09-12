@@ -695,9 +695,18 @@ export function CaptureFlow({
                 label="Procedure Category"
                 name="procedure_category"
                 value={fields.procedureCategory}
-                onChange={(v) => set('procedureCategory', v as Fields['procedureCategory'])}
+                onChange={(v) => {
+                  const cat = v as Fields['procedureCategory'];
+                  set('procedureCategory', cat);
+                  if (cat === 'diagnostic_block') set('procedureIntent', 'diagnostic');
+                  else if (cat === 'therapeutic_block' || cat === 'neuromodulation') set('procedureIntent', 'therapeutic');
+                  else if (cat === 'neurolytic_procedure') set('procedureIntent', 'neurolytic');
+                  else if (cat === 'other') set('procedureIntent', 'therapeutic');
+                  else set('procedureIntent', '');
+                }}
                 options={PROCEDURE_CATEGORIES}
               />
+              <input type="hidden" name="procedure_intent" value={fields.procedureIntent} />
               <TextField
                 label="Level(s) / Laterality"
                 name="procedure_level_laterality"
@@ -719,21 +728,25 @@ export function CaptureFlow({
                 onChange={(v) => set('drugsUsed', v)}
                 placeholder="e.g. Ropivacaine 0.2% 2ml + Dexamethasone 4mg"
               />
-              <SelectField
-                label="Procedure Intent"
-                name="procedure_intent"
-                value={fields.procedureIntent}
-                onChange={(v) => set('procedureIntent', v as Fields['procedureIntent'])}
-                options={PROCEDURE_INTENTS}
-              />
               <div className="grid grid-cols-2 gap-3">
-                <TextField
-                  label="Immediate Pain Relief (NRS 0–10)"
-                  name="immediate_pain_relief_nrs"
-                  value={fields.immediatePainReliefNrs}
-                  onChange={(v) => set('immediatePainReliefNrs', v)}
-                  type="number"
-                />
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+                    Immediate Pain Relief (NRS 0–10)
+                  </label>
+                  <select
+                    name="immediate_pain_relief_nrs"
+                    value={fields.immediatePainReliefNrs}
+                    onChange={(e) => set('immediatePainReliefNrs', e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                  >
+                    <option value="">— Select (NRS 0–10) —</option>
+                    {PAIN_SCORE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <TextField
                   label="Immediate Complications"
                   name="immediate_complications"
@@ -742,13 +755,6 @@ export function CaptureFlow({
                   placeholder="e.g. none"
                 />
               </div>
-              <TextField
-                label="Planned Follow-up Interval"
-                name="planned_followup_interval"
-                value={fields.plannedFollowupInterval}
-                onChange={(v) => set('plannedFollowupInterval', v)}
-                placeholder="e.g. 1 week, 2 weeks"
-              />
             </FieldSet>
 
             <VerifiedField
