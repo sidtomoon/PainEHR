@@ -107,10 +107,10 @@ begin
   end if;
 end $$;
 
--- 4. Seed admin role for Dr. Varun if user already exists
+-- 4. Seed admin role for Dr. Varun and sidtomoon if user already exists
 insert into user_roles (user_id, email, role, display_name)
 select id, email, 'admin', 'Dr. Varun Singla'
 from auth.users
-where email = 'drvarunsinglapgi@gmail.com'
+where email in ('sidtomoon@gmail.com', 'drvarunsinglapgi@gmail.com')
 on conflict (user_id) do update
 set role = 'admin', display_name = 'Dr. Varun Singla';
