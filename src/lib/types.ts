@@ -20,6 +20,16 @@ export type PatientGlobalImpression = 'much_worse' | 'worse' | 'no_change' | 'be
 export type AnnouncementRecipientStatus = 'pending' | 'sent' | 'failed';
 export type CheckinType = 'day3_postop_pgic';
 
+export type MediaType =
+  | 'xray'
+  | 'mri'
+  | 'ct'
+  | 'ultrasound'
+  | 'procedure_photo'
+  | 'procedure_video'
+  | 'lab_report'
+  | 'other';
+
 export interface Patient {
   id: string;
   patient_code: string;
@@ -31,6 +41,20 @@ export interface Patient {
   research_consent_date: string | null;
   whatsapp_opt_in: boolean;
   whatsapp_opt_in_date: string | null;
+  onedrive_folder_url?: string | null;
+  created_at: string;
+}
+
+export interface PatientMedia {
+  id: string;
+  patient_id: string;
+  encounter_id: string | null;
+  user_id: string | null;
+  media_type: MediaType;
+  title: string;
+  url: string;
+  scan_date: string;
+  notes: string | null;
   created_at: string;
 }
 

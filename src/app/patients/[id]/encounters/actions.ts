@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import type {
   AppointmentType, CaptureSource, EncounterConfidence, EncounterType, FunctionalChange, GoalOfCare,
-  ImagingConcordance, PainLocation, PainMechanism, PatientGlobalImpression, ProcedureCategory,
+  ImagingConcordance, MediaType, PainLocation, PainMechanism, PatientGlobalImpression, ProcedureCategory,
   ProcedureGuidance, ProcedureIntent,
 } from '@/lib/types';
 
@@ -204,6 +204,26 @@ export async function saveEncounter(patientId: string, formData: FormData) {
         storage_path: path,
         media_type: file.type,
       });
+    }
+  }
+
+  // --- Auto-link Procedure OneDrive Media ---
+  const procedureMediaUrl = str(formData, 'procedure_media_url');
+  if (procedureMediaUrl) {
+    const mediaType = (str(formData, 'procedure_media_type') || 'procedure_video') as MediaType;
+    const mediaTitle = str(formData, 'procedure_media_title') || `${procedure || 'Procedure'} Media`;
+    try {
+      await supabase.from('patient_media').insert({
+        patient_id: patientId,
+        encounter_id: encounter.id,
+        user_id: user.id,
+        media_type: mediaType,
+        title: mediaTitle,
+        url: procedureMediaUrl,
+        scan_date: str(formData, 'encounter_date') || new Date().toISOString().split('T')[0],
+      });
+    } catch (mediaErr) {
+      console.error('Failed to auto-insert patient_media from procedure encounter:', mediaErr);
     }
   }
 

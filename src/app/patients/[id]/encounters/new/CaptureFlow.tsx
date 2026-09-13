@@ -92,6 +92,11 @@ type Fields = {
   immediateComplications: string;
   plannedFollowupInterval: string;
 
+  // Procedure media link (OneDrive)
+  procedureMediaType: string;
+  procedureMediaTitle: string;
+  procedureMediaUrl: string;
+
   // Follow-up visit
   functionalChange: FunctionalChange | '';
   reinterventionNeeded: TriState;
@@ -116,6 +121,7 @@ const BASE_EMPTY_FIELDS: Fields = {
   procedureCategory: '', procedureLevelLaterality: '', procedureGuidance: '',
   drugsUsed: '', procedureIntent: '', immediatePainReliefNrs: '', immediateComplications: '',
   plannedFollowupInterval: '',
+  procedureMediaType: 'procedure_video', procedureMediaTitle: '', procedureMediaUrl: '',
   functionalChange: '', reinterventionNeeded: '', learningPoint: '',
   functionScore: '', moodScore: '', sleepScore: '', qolScore: '',
   widespreadPain: '', patientGlobalImpression: '', adverseEvent: '',
@@ -866,6 +872,50 @@ export function CaptureFlow({
                   value={fields.immediateComplications}
                   onChange={(v) => set('immediateComplications', v)}
                   placeholder="e.g. none"
+                />
+              </div>
+
+              {/* OneDrive Cloud Media / Video Link */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900 uppercase tracking-wide">
+                  <span>🎥</span>
+                  <span>Attach Procedural Media / Video (OneDrive Link)</span>
+                </div>
+                <p className="text-xs text-slate-500 leading-normal">
+                  Paste a OneDrive direct link to automatically attach C-arm fluoroscopy clips, ultrasound video, or post-procedure photos to this patient’s chart.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
+                      Media Type
+                    </label>
+                    <select
+                      name="procedure_media_type"
+                      value={fields.procedureMediaType}
+                      onChange={(e) => set('procedureMediaType', e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="procedure_video">🎥 Procedure Video</option>
+                      <option value="procedure_photo">📸 Procedure Photo</option>
+                      <option value="ultrasound">📱 Ultrasound Image/Clip</option>
+                      <option value="xray">🩻 Fluoroscopy / X-Ray</option>
+                      <option value="other">📁 Other File</option>
+                    </select>
+                  </div>
+                  <TextField
+                    label="Media Title"
+                    name="procedure_media_title"
+                    value={fields.procedureMediaTitle}
+                    onChange={(v) => set('procedureMediaTitle', v)}
+                    placeholder="e.g. C-Arm Fluoroscopy Needle Placement"
+                  />
+                </div>
+                <TextField
+                  label="OneDrive Share URL / Link"
+                  name="procedure_media_url"
+                  value={fields.procedureMediaUrl}
+                  onChange={(v) => set('procedureMediaUrl', v)}
+                  placeholder="https://1drv.ms/... or https://...my.sharepoint.com/..."
                 />
               </div>
             </FieldSet>

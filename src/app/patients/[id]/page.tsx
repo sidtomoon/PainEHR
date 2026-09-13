@@ -5,7 +5,8 @@ import { Header } from '@/app/components/Header';
 import { updateAppointmentStatus } from './appointments/actions';
 import { SendPreOpForm } from './appointments/SendPreOpForm';
 import { SendPostOpForm } from './encounters/SendPostOpForm';
-import type { Appointment, Encounter, Patient, PatientCheckin, PatientOutcomesSummary } from '@/lib/types';
+import { PatientMediaSection } from './PatientMediaSection';
+import type { Appointment, Encounter, Patient, PatientCheckin, PatientMedia, PatientOutcomesSummary } from '@/lib/types';
 
 const TYPE_LABELS: Record<string, string> = {
   new: 'New', followup: 'Follow-up', procedure: 'Procedure', other: 'Other',
@@ -15,15 +16,18 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: patient }, { data: encounters }, { data: appointments }, { data: outcomes }, { data: checkins }] = await Promise.all([
+  const [{ data: patient }, { data: encounters }, { data: appointments }, { data: outcomes }, { data: checkins }, mediaResult] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).single<Patient>(),
     supabase.from('encounters').select('*').eq('patient_id', id).order('encounter_date', { ascending: false }),
     supabase.from('appointments').select('*').eq('patient_id', id).eq('status', 'scheduled').order('scheduled_date', { ascending: true }),
     supabase.from('patient_outcomes_summary').select('*').eq('patient_id', id).maybeSingle<PatientOutcomesSummary>(),
     supabase.from('patient_checkins').select('*').eq('patient_id', id).order('created_at', { ascending: false }),
+    supabase.from('patient_media').select('*').eq('patient_id', id).order('scan_date', { ascending: false }),
   ]);
 
   if (!patient) notFound();
+
+  const media = (mediaResult?.data || []) as PatientMedia[];
 
   return (
     <>
@@ -73,6 +77,8 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
             )}
           </div>
         </div>
+
+        <PatientMediaSection patient={patient} initialMedia={media} />
 
         {outcomes && outcomes.baseline_date && outcomes.latest_date && outcomes.baseline_date !== outcomes.latest_date && (
           <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
