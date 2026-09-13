@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import type { ClinicalRule } from '@/lib/clinical-decision-rules';
 
 interface DirectedHistoryProps {
@@ -16,15 +15,14 @@ export function DirectedHistorySection({
   onAnswerChange,
   onAutoSyncSummary,
 }: DirectedHistoryProps) {
-  // Compute structured summaries whenever answers change
-  useEffect(() => {
+  function computeSummariesAndSync(nextAnswers: Record<string, string[]>) {
     if (!onAutoSyncSummary) return;
 
     const normalNotes: string[] = [];
     const redFlagNotes: string[] = [];
 
     rule.questions.forEach((q) => {
-      const selected = answers[q.id] || [];
+      const selected = nextAnswers[q.id] || [];
       if (selected.length === 0) return;
 
       if (q.isRedFlag) {
@@ -43,32 +41,35 @@ export function DirectedHistorySection({
     });
 
     onAutoSyncSummary(normalNotes.join('\n'), redFlagNotes.join('\n'));
-  }, [answers, rule, onAutoSyncSummary]);
+  }
 
-  function handleToggle(questionId: string, option: string, isMulti: boolean, isRedFlag?: boolean) {
+  function handleToggle(questionId: string, option: string, isMulti: boolean, _isRedFlag?: boolean) {
     const current = answers[questionId] || [];
+    let next: string[];
 
     if (!isMulti) {
       // Single select: toggle option on/off
-      const next = current.includes(option) ? [] : [option];
-      onAnswerChange(questionId, next);
+      next = current.includes(option) ? [] : [option];
     } else {
       // Multi-select
       if (current.includes(option)) {
-        onAnswerChange(questionId, current.filter((o) => o !== option));
+        next = current.filter((o) => o !== option);
       } else {
         // If selecting a "None / Screened negative" option, clear other positives
         if (option.toLowerCase().includes('none') || option.toLowerCase().includes('screened: no')) {
-          onAnswerChange(questionId, [option]);
+          next = [option];
         } else {
           // If selecting a positive symptom, remove any "None" option
           const withoutNone = current.filter(
             (o) => !o.toLowerCase().includes('none') && !o.toLowerCase().includes('screened: no')
           );
-          onAnswerChange(questionId, [...withoutNone, option]);
+          next = [...withoutNone, option];
         }
       }
     }
+
+    onAnswerChange(questionId, next);
+    computeSummariesAndSync({ ...answers, [questionId]: next });
   }
 
   return (

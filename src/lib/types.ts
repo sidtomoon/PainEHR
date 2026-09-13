@@ -70,8 +70,9 @@ export interface Encounter {
   verified_at: string | null;
   diagnosis_code: string | null;
 
-  // New / follow-up assessment
   pain_mechanism: PainMechanism | null;
+  past_history: string | null;
+  past_treatments: string | null;
   functional_impact: string | null;
   red_flags: string | null;
   diagnosis_confidence: ConfidenceLevel | null;

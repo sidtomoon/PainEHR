@@ -153,3 +153,19 @@ export async function signInWithPassword(_prevState: unknown, formData: FormData
 
   redirect('/patients');
 }
+
+/**
+ * Set or change password for currently logged-in user
+ */
+export async function updateUserPassword(_prevState: unknown, formData: FormData) {
+  const newPassword = String(formData.get('password') || '').trim();
+  if (!newPassword || newPassword.length < 6) {
+    return { status: 'error' as const, message: 'Password must be at least 6 characters.' };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    return { status: 'error' as const, message: error.message };
+  }
+  return { status: 'success' as const, message: 'Password updated successfully!' };
+}

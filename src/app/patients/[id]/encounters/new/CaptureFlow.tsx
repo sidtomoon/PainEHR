@@ -29,6 +29,32 @@ const CONF_STYLES: Record<string, string> = {
   low: 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
+const COMMON_COMORBIDITIES = [
+  'Hypertension',
+  'Type 2 Diabetes',
+  'CAD / IHD',
+  'Hypothyroidism',
+  'Prior Spine Surgery',
+  'Prior Joint Arthroplasty',
+  'Asthma / COPD',
+  'CKD',
+  'No major comorbidities',
+  'NKDA (No known drug allergies)',
+];
+
+const COMMON_PAST_TREATMENTS = [
+  'Oral NSAIDs',
+  'Pregabalin / Gabapentin',
+  'Tramadol / Weak Opioids',
+  'Strong Opioids',
+  'Physiotherapy / Rehab',
+  'Epidural Steroid Injection',
+  'Facet / MBB Block / RFA',
+  'Joint Injections (Steroid/HA/PRP)',
+  'Spine Surgery',
+  'Minimal / transient relief',
+];
+
 type TriState = '' | 'yes' | 'no';
 
 type Fields = {
@@ -44,6 +70,8 @@ type Fields = {
 
   // New assessment fields
   painMechanism: PainMechanism | '';
+  pastHistory: string;
+  pastTreatments: string;
   functionalImpact: string;
   redFlags: string;
   diagnosisConfidence: '' | 'high' | 'medium' | 'low';
@@ -82,7 +110,7 @@ type Fields = {
 const BASE_EMPTY_FIELDS: Fields = {
   encounterType: 'new', chiefComplaint: '', diagnosis: '', diagnosisCode: '', painLocation: '',
   painScoreNrs: '', procedure: '', plan: '', notes: '',
-  painMechanism: '', functionalImpact: '', redFlags: '', diagnosisConfidence: '',
+  painMechanism: '', pastHistory: '', pastTreatments: '', functionalImpact: '', redFlags: '', diagnosisConfidence: '',
   imagingConcordance: '', isCancerPain: '', cancerType: '', metastaticDisease: '',
   oncologicTreatment: '', goalOfCare: '',
   procedureCategory: '', procedureLevelLaterality: '', procedureGuidance: '',
@@ -490,19 +518,19 @@ export function CaptureFlow({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Date</label>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">Date</label>
             <input
               name="encounter_date" type="date" value={encounterDate}
               onChange={(e) => setEncounterDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Encounter type</label>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">Encounter type</label>
             <select
               name="encounter_type" value={fields.encounterType}
               onChange={(e) => set('encounterType', e.target.value as EncounterType)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="followup">Follow-up</option>
               <option value="procedure">Procedure</option>
@@ -515,7 +543,7 @@ export function CaptureFlow({
         {/* Editable baseline fields if New Encounter OR clinician explicitly toggles "Edit baseline" */}
         {(isNew || showEditBaseline) && (
           <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+            <div className="text-xs font-bold text-slate-800 uppercase tracking-wide">
               {isNew ? 'Chief Complaint & Diagnosis' : 'Edit Baseline Information'}
             </div>
             <VerifiedField label="Chief complaint" name="chief_complaint" value={fields.chiefComplaint} confidence={confidences.chief_complaint}
@@ -533,10 +561,10 @@ export function CaptureFlow({
             />
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">
                   Pain location
                   {activeRule && (
-                    <span className="ml-1.5 font-normal text-[11px] text-teal-600 normal-case">
+                    <span className="ml-1.5 font-semibold text-[11px] text-teal-700 normal-case">
                       (directed for {activeRule.name})
                     </span>
                   )}
@@ -545,7 +573,7 @@ export function CaptureFlow({
                   <button
                     type="button"
                     onClick={() => setShowAllLocations((v) => !v)}
-                    className="text-[11px] text-slate-400 hover:text-teal-700 underline transition"
+                    className="text-[11px] text-slate-500 hover:text-teal-700 underline transition cursor-pointer"
                   >
                     {showAllLocations ? 'Show directed options only' : 'Show all body locations'}
                   </button>
@@ -555,7 +583,7 @@ export function CaptureFlow({
                 name="pain_location"
                 value={fields.painLocation}
                 onChange={(e) => set('painLocation', e.target.value as PainLocation)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="">— Select pain location —</option>
                 {displayedLocations.map((loc) => (
@@ -589,12 +617,97 @@ export function CaptureFlow({
           </div>
         )}
 
+        {/* Past Medical & Surgical History + Past Treatments */}
+        {(isNew || showEditBaseline) ? (
+          <FieldSet title="Past Medical & Treatment History">
+            {/* Past Medical / Surgical History */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                  Past Medical & Surgical History / Comorbidities
+                </label>
+                <span className="text-[11px] text-slate-500">Tap to add</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {COMMON_COMORBIDITIES.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      const cur = fields.pastHistory ? fields.pastHistory.trim() : '';
+                      if (!cur.toLowerCase().includes(chip.toLowerCase())) {
+                        set('pastHistory', cur ? `${cur}, ${chip}` : chip);
+                      }
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 text-slate-800 hover:text-teal-900 transition font-medium cursor-pointer"
+                  >
+                    + {chip}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                name="past_history"
+                rows={2}
+                value={fields.pastHistory}
+                onChange={(e) => set('pastHistory', e.target.value)}
+                placeholder="e.g. HTN on Telmisartan, T2DM on Metformin; L4-L5 discectomy in 2021; No known drug allergies"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            {/* Past Treatments & Interventions Tried */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                  Past Treatments & Interventions Tried
+                </label>
+                <span className="text-[11px] text-slate-500">Tap to add</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {COMMON_PAST_TREATMENTS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      const cur = fields.pastTreatments ? fields.pastTreatments.trim() : '';
+                      if (!cur.toLowerCase().includes(chip.toLowerCase())) {
+                        set('pastTreatments', cur ? `${cur}, ${chip}` : chip);
+                      }
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 text-slate-800 hover:text-teal-900 transition font-medium cursor-pointer"
+                  >
+                    + {chip}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                name="past_treatments"
+                rows={2}
+                value={fields.pastTreatments}
+                onChange={(e) => set('pastTreatments', e.target.value)}
+                placeholder="e.g. Tried Aceclofenac with mild relief (gastritis); Pregabalin 75mg gave dizziness; Physio 3 weeks; Lumbar epidural injection 6 months back (50% relief for 2 months)"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+          </FieldSet>
+        ) : (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowEditBaseline(true)}
+              className="text-xs text-slate-500 hover:text-teal-700 underline transition cursor-pointer"
+            >
+              + View / Update Past History & Treatments
+            </button>
+          </div>
+        )}
+
         {/* ── CASE 1: FOLLOW-UP ENTRY (RECORD ONLY FOLLOW-UP DATA) ── */}
         {isFollowup && (
           <>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                   Current Pain score (NRS 0–10)
                 </label>
                 {priorEncounter?.pain_score_nrs != null && (
@@ -608,7 +721,7 @@ export function CaptureFlow({
                 required
                 value={fields.painScoreNrs}
                 onChange={(e) => set('painScoreNrs', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-900"
               >
                 <option value="">— Select Pain Score (NRS 0–10) —</option>
                 {PAIN_SCORE_OPTIONS.map((opt) => (
@@ -730,14 +843,14 @@ export function CaptureFlow({
               />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                     Immediate Pain Relief (NRS 0–10)
                   </label>
                   <select
                     name="immediate_pain_relief_nrs"
                     value={fields.immediatePainReliefNrs}
                     onChange={(e) => set('immediatePainReliefNrs', e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-900"
                   >
                     <option value="">— Select (NRS 0–10) —</option>
                     {PAIN_SCORE_OPTIONS.map((opt) => (
@@ -780,7 +893,7 @@ export function CaptureFlow({
           <>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                   Pain score (NRS 0–10)
                 </label>
                 {confidences.pain_score_nrs && (
@@ -792,7 +905,7 @@ export function CaptureFlow({
                 required
                 value={fields.painScoreNrs}
                 onChange={(e) => set('painScoreNrs', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-800"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium text-slate-900"
               >
                 <option value="">— Select Pain Score (NRS 0–10) —</option>
                 {PAIN_SCORE_OPTIONS.map((opt) => (
@@ -879,7 +992,7 @@ export function CaptureFlow({
 
             <FieldSet title="Baseline Outcomes & Functional Impact">
               <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
                   Functional Impact (Clinical Grade)
                 </label>
                 <select
@@ -893,7 +1006,7 @@ export function CaptureFlow({
                       set('functionScore', matchedOpt.score);
                     }
                   }}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="">— Select Functional Impact Grade —</option>
                   {FUNCTIONAL_IMPACT_OPTIONS.map((opt) => (
@@ -908,7 +1021,7 @@ export function CaptureFlow({
               </div>
 
               <div className="pt-2 border-t border-slate-100">
-                <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-2">
+                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-2">
                   Outcome Scores (0–10, leave blank if not assessed)
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -951,7 +1064,7 @@ export function CaptureFlow({
                     </span>
                   </div>
                   <TriField
-                    label="Widespread pain?"
+                    label="Widespread Body Pain (Multi-quadrant / axial & peripheral)?"
                     name="widespread_pain"
                     value={fields.widespreadPain}
                     onChange={(v) => set('widespreadPain', v)}
@@ -961,8 +1074,11 @@ export function CaptureFlow({
                 <div className="pt-1 flex items-center justify-end">
                   <button
                     type="button"
-                    onClick={() => setManualShowWidespread(true)}
-                    className="text-[11px] text-slate-400 hover:text-teal-700 transition"
+                    onClick={() => {
+                      setManualShowWidespread(true);
+                      set('widespreadPain', 'yes');
+                    }}
+                    className="text-[11px] text-slate-500 hover:text-teal-700 transition cursor-pointer"
                   >
                     + Check for widespread pain
                   </button>
@@ -982,21 +1098,21 @@ export function CaptureFlow({
             <SelectField label="Type" name="schedule_type" value={scheduleType}
               onChange={(v) => setScheduleType(v as '' | 'followup' | 'procedure')} options={['followup', 'procedure']} />
             <div>
-              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Date</label>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">Date</label>
               <input
                 name="schedule_date" type="date" value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Time</label>
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">Time</label>
               <input
                 name="schedule_time" type="time" value={scheduleTime}
                 onChange={(e) => setScheduleTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
             <TextField label="Location" name="schedule_location" value={scheduleLocation}
@@ -1036,15 +1152,15 @@ function VerifiedField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</label>
+        <label className="text-xs font-semibold text-slate-700 uppercase tracking-wide">{label}</label>
         {confidence ? <ConfidenceBadge confidence={confidence} /> : hint}
       </div>
       {textarea ? (
         <textarea name={name} value={value} onChange={(e) => onChange(e.target.value)} rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500" />
       ) : (
         <input name={name} type={type} value={value} onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500" />
       )}
     </div>
   );
@@ -1052,7 +1168,7 @@ function VerifiedField({
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium uppercase tracking-wide ${CONF_STYLES[confidence] || CONF_STYLES.low}`}>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase tracking-wide ${CONF_STYLES[confidence] || CONF_STYLES.low}`}>
       {confidence}
     </span>
   );
@@ -1060,8 +1176,8 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 
 function FieldSet({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-white">
-      <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</div>
+    <div className="border border-slate-200 rounded-lg p-3 space-y-3 bg-white shadow-2xs">
+      <div className="text-xs font-bold text-slate-800 uppercase tracking-wide">{title}</div>
       {children}
     </div>
   );
@@ -1075,13 +1191,13 @@ function TextField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">{label}</label>
       {textarea ? (
         <textarea name={name} value={value} onChange={(e) => onChange(e.target.value)} rows={2} placeholder={placeholder}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500" />
       ) : (
         <input name={name} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500" />
       )}
     </div>
   );
@@ -1094,9 +1210,9 @@ function SelectField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">{label}</label>
       <select name={name} value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
         <option value="">—</option>
         {options.map((opt) => <option key={opt} value={opt}>{opt.replace(/_/g, ' ')}</option>)}
       </select>
@@ -1111,9 +1227,9 @@ function TriField({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">{label}</label>
       <select name={name} value={value} onChange={(e) => onChange(e.target.value as '' | 'yes' | 'no')}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
+        className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500">
         <option value="">—</option>
         <option value="yes">Yes</option>
         <option value="no">No</option>
