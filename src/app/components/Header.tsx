@@ -21,6 +21,10 @@ export async function Header() {
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400"></span>
               calendar
             </Link>
+            <Link href="/modalities" className="text-emerald-400 hover:text-emerald-300 transition font-medium flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              modalities
+            </Link>
             {isAdmin && (
               <>
                 <Link href="/patients/export" className="text-slate-400 hover:text-white transition">

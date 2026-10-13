@@ -4,12 +4,15 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  // /checkin is a token-gated public page patients open from a WhatsApp
-  // link — they never sign in, so it must bypass the auth redirect.
+  // /checkin, /modalities, and /rx are patient-facing pages that patients
+  // open from WhatsApp/SMS links or self-guided exercise routines —
+  // they never sign in with a clinic account, so they must bypass the auth redirect.
   const isAuthRoute =
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/auth') ||
-    request.nextUrl.pathname.startsWith('/checkin');
+    request.nextUrl.pathname.startsWith('/checkin') ||
+    request.nextUrl.pathname.startsWith('/modalities') ||
+    request.nextUrl.pathname.startsWith('/rx');
 
   // Fast-path: Check if any Supabase session cookies exist
   const allCookies = request.cookies.getAll();

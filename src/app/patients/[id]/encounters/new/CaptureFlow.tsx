@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { CdssPrompts } from './CdssPrompts';
 import { DiagnosisCodeInput } from './DiagnosisCodeInput';
 import { DirectedHistorySection } from './DirectedHistorySection';
+import { ManagementProtocolsSection } from './ManagementProtocolsSection';
+import { NonInvasiveRxBuilder } from './NonInvasiveRxBuilder';
+import { SmartPhrasesPicker } from '@/app/components/SmartPhrasesPicker';
 import {
   matchClinicalRule,
   isCancerDiagnosis,
@@ -193,6 +196,19 @@ export function CaptureFlow({
 
   function set<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleAddAdviceToNotes(adviceText: string) {
+    const cur = fields.notes ? fields.notes.trim() : '';
+    if (!cur) {
+      set('notes', adviceText);
+    } else if (!cur.includes(adviceText.trim())) {
+      set('notes', `${cur}\n${adviceText}`);
+    }
+  }
+
+  function handleReplaceNotes(newNotes: string) {
+    set('notes', newNotes);
   }
 
   const activeRule = matchClinicalRule(fields.diagnosisCode, fields.diagnosis);
@@ -789,8 +805,27 @@ export function CaptureFlow({
               onChange={(v) => set('plan', v)}
               textarea
             />
+            <NonInvasiveRxBuilder
+              currentPlan={fields.plan}
+              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+              onAppendAdvice={handleAddAdviceToNotes}
+            />
+            <ManagementProtocolsSection
+              diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
+              diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || ''}
+              painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
+              isProcedure={false}
+              currentNotes={fields.notes}
+              onAddAdvice={handleAddAdviceToNotes}
+              onReplaceAdvice={handleReplaceNotes}
+            />
+            <SmartPhrasesPicker
+              onInsert={(text) => {
+                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
+              }}
+            />
             <TextField
-              label="Notes / Learning Points"
+              label="Notes / Instructions & Advice (Printed on Rx)"
               name="notes"
               value={fields.notes}
               onChange={(v) => set('notes', v)}
@@ -928,8 +963,27 @@ export function CaptureFlow({
               onChange={(v) => set('plan', v)}
               textarea
             />
+            <NonInvasiveRxBuilder
+              currentPlan={fields.plan}
+              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+              onAppendAdvice={handleAddAdviceToNotes}
+            />
+            <ManagementProtocolsSection
+              diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
+              diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || fields.procedure || ''}
+              painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
+              isProcedure={true}
+              currentNotes={fields.notes}
+              onAddAdvice={handleAddAdviceToNotes}
+              onReplaceAdvice={handleReplaceNotes}
+            />
+            <SmartPhrasesPicker
+              onInsert={(text) => {
+                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
+              }}
+            />
             <TextField
-              label="Procedural Notes"
+              label="Procedural Notes & Post-Op Advice (Printed on Rx)"
               name="notes"
               value={fields.notes}
               onChange={(v) => set('notes', v)}
@@ -1136,9 +1190,28 @@ export function CaptureFlow({
               )}
             </FieldSet>
 
-            <VerifiedField label="Treatment Plan" name="plan" value={fields.plan} confidence={confidences.plan}
+            <VerifiedField label="Treatment Plan / Pharmacological Rx" name="plan" value={fields.plan} confidence={confidences.plan}
               onChange={(v) => set('plan', v)} textarea />
-            <TextField label="Clinical Notes" name="notes" value={fields.notes} onChange={(v) => set('notes', v)} textarea />
+            <NonInvasiveRxBuilder
+              currentPlan={fields.plan}
+              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+              onAppendAdvice={handleAddAdviceToNotes}
+            />
+            <ManagementProtocolsSection
+              diagnosisCode={fields.diagnosisCode}
+              diagnosisText={fields.diagnosis}
+              painLocation={fields.painLocation}
+              isProcedure={false}
+              currentNotes={fields.notes}
+              onAddAdvice={handleAddAdviceToNotes}
+              onReplaceAdvice={handleReplaceNotes}
+            />
+            <SmartPhrasesPicker
+              onInsert={(text) => {
+                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
+              }}
+            />
+            <TextField label="Clinical Notes & Advice (Printed on Rx)" name="notes" value={fields.notes} onChange={(v) => set('notes', v)} textarea />
           </>
         )}
 

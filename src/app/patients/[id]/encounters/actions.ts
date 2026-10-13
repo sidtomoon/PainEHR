@@ -242,5 +242,5 @@ export async function saveEncounter(patientId: string, formData: FormData) {
   }
 
   revalidatePath(`/patients/${patientId}`);
-  redirect(`/patients/${patientId}`);
+  redirect(`/patients/${patientId}/encounters/${encounter.id}/prescription?created=true`);
 }

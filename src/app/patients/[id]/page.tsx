@@ -6,7 +6,8 @@ import { updateAppointmentStatus } from './appointments/actions';
 import { SendPreOpForm } from './appointments/SendPreOpForm';
 import { SendPostOpForm } from './encounters/SendPostOpForm';
 import { PatientMediaSection } from './PatientMediaSection';
-import type { Appointment, Encounter, Patient, PatientCheckin, PatientMedia, PatientOutcomesSummary } from '@/lib/types';
+import { PatientSynopsisAndRx } from './PatientSynopsisAndRx';
+import type { Appointment, Encounter, Patient, PatientCheckin, PatientMedia, PatientOutcomesSummary, PatientPrescription } from '@/lib/types';
 
 const TYPE_LABELS: Record<string, string> = {
   new: 'New', followup: 'Follow-up', procedure: 'Procedure', other: 'Other',
@@ -16,18 +17,28 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: patient }, { data: encounters }, { data: appointments }, { data: outcomes }, { data: checkins }, mediaResult] = await Promise.all([
+  const [
+    { data: patient },
+    { data: encounters },
+    { data: appointments },
+    { data: outcomes },
+    { data: checkins },
+    mediaResult,
+    prescriptionsResult,
+  ] = await Promise.all([
     supabase.from('patients').select('*').eq('id', id).single<Patient>(),
     supabase.from('encounters').select('*').eq('patient_id', id).order('encounter_date', { ascending: false }),
     supabase.from('appointments').select('*').eq('patient_id', id).eq('status', 'scheduled').order('scheduled_date', { ascending: true }),
     supabase.from('patient_outcomes_summary').select('*').eq('patient_id', id).maybeSingle<PatientOutcomesSummary>(),
     supabase.from('patient_checkins').select('*').eq('patient_id', id).order('created_at', { ascending: false }),
     supabase.from('patient_media').select('*').eq('patient_id', id).order('scan_date', { ascending: false }),
+    supabase.from('patient_prescriptions').select('*').eq('patient_id', id).order('created_at', { ascending: false }),
   ]);
 
   if (!patient) notFound();
 
   const media = (mediaResult?.data || []) as PatientMedia[];
+  const prescriptions = (prescriptionsResult?.data || []) as PatientPrescription[];
 
   return (
     <>
@@ -78,7 +89,68 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
           </div>
         </div>
 
+        <PatientSynopsisAndRx
+          patient={patient}
+          latestEncounter={encounters?.[0] || null}
+          outcomes={outcomes}
+          initialPrescriptions={prescriptions}
+        />
+
         <PatientMediaSection patient={patient} initialMedia={media} />
+
+        {/* Non-Invasive Modalities Quick Access */}
+        <div className="mb-4 bg-white border border-slate-200 rounded-lg p-3 shadow-2xs">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                🌐 Non-Invasive Digital Therapies
+              </span>
+              <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 px-1.5 py-0.2 rounded border border-teal-200">
+                5 Interactive Tools
+              </span>
+            </div>
+            <Link href="/modalities" className="text-[11px] text-teal-700 hover:text-teal-900 font-medium underline">
+              View All ↗
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            <Link
+              href="/modalities/prt"
+              className="text-center p-2 rounded-lg border border-teal-200 bg-teal-50/50 hover:bg-teal-100/70 transition"
+            >
+              <span className="block text-xs font-bold text-teal-900">PRT</span>
+              <span className="text-[10px] text-teal-700 block">Somatic Tracking</span>
+            </Link>
+            <Link
+              href="/modalities/graded-pt"
+              className="text-center p-2 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 transition"
+            >
+              <span className="block text-xs font-bold text-blue-900">Graded PT</span>
+              <span className="text-[10px] text-blue-700 block">Hinge/Kaia Pacing</span>
+            </Link>
+            <Link
+              href="/modalities/act"
+              className="text-center p-2 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 transition"
+            >
+              <span className="block text-xs font-bold text-amber-900">ACT</span>
+              <span className="text-[10px] text-amber-800 block">Values Bull’s-Eye</span>
+            </Link>
+            <Link
+              href="/modalities/yoga"
+              className="text-center p-2 rounded-lg border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 transition"
+            >
+              <span className="block text-xs font-bold text-emerald-900">CLBP Yoga</span>
+              <span className="text-[10px] text-emerald-700 block">Spine Pacing</span>
+            </Link>
+            <Link
+              href="/modalities/cbt-i"
+              className="text-center p-2 rounded-lg border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/70 transition col-span-2 sm:col-span-1"
+            >
+              <span className="block text-xs font-bold text-indigo-900">CBT-I</span>
+              <span className="text-[10px] text-indigo-700 block">Sleep Efficiency</span>
+            </Link>
+          </div>
+        </div>
 
         {outcomes && outcomes.baseline_date && outcomes.latest_date && outcomes.baseline_date !== outcomes.latest_date && (
           <div className="mb-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
@@ -164,16 +236,24 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
             {(encounters as Encounter[]).map((enc) => (
               <details key={enc.id} className="bg-white border border-slate-200 rounded-lg px-4 py-3 group">
                 <summary className="cursor-pointer list-none">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{enc.encounter_date}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium uppercase tracking-wide">
-                      {TYPE_LABELS[enc.encounter_type] || 'New'}
-                    </span>
-                    {!enc.verified_at && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium uppercase tracking-wide">
-                        unverified
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{enc.encounter_date}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium uppercase tracking-wide">
+                        {TYPE_LABELS[enc.encounter_type] || 'New'}
                       </span>
-                    )}
+                      {!enc.verified_at && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium uppercase tracking-wide">
+                          unverified
+                        </span>
+                      )}
+                    </div>
+                    <Link
+                      href={`/patients/${patient.id}/encounters/${enc.id}/prescription`}
+                      className="text-[11px] font-medium bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-2.5 py-1 rounded-md transition inline-flex items-center gap-1 shadow-2xs"
+                    >
+                      📄 Prescription PDF
+                    </Link>
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">
                     {enc.diagnosis || 'No diagnosis recorded'}
@@ -246,7 +326,15 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
 
                   <DetailRow label="Plan" value={enc.plan} />
                   <DetailRow label="Notes" value={enc.notes} />
-                  <div className="text-[11px] text-slate-400 pt-1">source: {enc.source}</div>
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                    <div className="text-[11px] text-slate-400">source: {enc.source}</div>
+                    <Link
+                      href={`/patients/${patient.id}/encounters/${enc.id}/prescription`}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center gap-1"
+                    >
+                      🖨️ View &amp; Print Prescription PDF →
+                    </Link>
+                  </div>
                 </div>
               </details>
             ))}

@@ -58,6 +58,24 @@ export interface PatientMedia {
   created_at: string;
 }
 
+export interface PrescriptionItem {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions: string;
+}
+
+export interface PatientPrescription {
+  id: string;
+  patient_id: string;
+  encounter_id: string | null;
+  user_id: string | null;
+  items: PrescriptionItem[];
+  advice: string | null;
+  created_at: string;
+}
+
 export interface EncounterConfidence {
   chief_complaint?: ConfidenceLevel;
   diagnosis?: ConfidenceLevel;
