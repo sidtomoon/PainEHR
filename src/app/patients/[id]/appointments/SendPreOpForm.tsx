@@ -14,7 +14,7 @@ export function SendPreOpForm({ patient, appointment }: Props) {
   const [open, setOpen] = useState(false);
   const [procedureName, setProcedureName] = useState('Procedure');
   const [instructions, setInstructions] = useState(
-    '1. Fast for 6 hours prior to the procedure (clear water allowed up to 2 hours before).\n2. Continue routine blood pressure medications with a small sip of water.\n3. Hold blood thinners/aspirin as discussed with doctor.\n4. Bring all recent MRI / CT films.\n5. Please arrange for an adult attendant to accompany you home.'
+    '1. Fast for 6 hours prior to the procedure (clear water allowed up to 2 hours before).\n2. Continue routine blood pressure medications with a small sip of water.\n3. Hold blood thinners/aspirin as discussed with doctor.\n4. Bring all recent MRI / CT films.\n5. Please arrange for an adult attendant to accompany you home.\n\nहिंदी निर्देश (Hindi Instructions):\n१. प्रोसीजर से ६ घंटे पहले खाली पेट रहें (सादा पानी २ घंटे पहले तक ले सकते हैं)।\n२. बीपी की दवा सुबह हल्के पानी के साथ समय पर लें।\n३. खून पतला करने वाली दवा (Aspirin आदि) डॉक्टर के कहे अनुसार बंद रखें।\n४. अपनी पुरानी MRI / X-Ray रिपोर्ट और दवाइयां साथ लाएं।\n५. कृपया अपने साथ एक परिजन को जरूर लाएं।'
   );
 
   const phone = patient.phone;

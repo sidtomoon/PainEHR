@@ -36,7 +36,7 @@ const COMMON_REGIMENS: {
         instructions: 'After breakfast',
       },
     ],
-    advice: 'Report any morning dizziness. Keep posture upright while sitting.',
+    advice: 'Report any morning dizziness. Keep posture upright.\nसुबह चक्कर आने पर सूचित करें। बैठते समय कमर सीधी रखें।',
   },
   {
     name: 'Acute Spine Flare SOS',
@@ -64,7 +64,7 @@ const COMMON_REGIMENS: {
         instructions: '30 mins before breakfast',
       },
     ],
-    advice: 'Strict avoidance of forward bending and weight lifting. Cold pack 15 mins twice daily.',
+    advice: 'Strict avoidance of forward bending and weight lifting. Cold pack 15 mins twice daily.\nआगे झुकना और भारी वजन उठाना सख्त मना है। दिन में 2 बार 15 मिनट बर्फ की सिकाई करें।',
   },
   {
     name: 'Post-Procedure Recovery',
@@ -85,7 +85,7 @@ const COMMON_REGIMENS: {
         instructions: 'Empty stomach',
       },
     ],
-    advice: 'Rest for 24 hours. Keep injection site clean and dry. Avoid intense physical exertion.',
+    advice: 'Rest for 24 hours. Keep injection site clean and dry. Avoid intense physical exertion.\n24 घंटे आराम करें। सुई वाली जगह को सूखा रखें। भारी काम न करें।',
   },
   {
     name: 'Central Sensitization / Fibromyalgia',
@@ -106,7 +106,7 @@ const COMMON_REGIMENS: {
         instructions: 'At bedtime',
       },
     ],
-    advice: 'Gradual low-impact aerobic walking. Maintain regular sleep schedule.',
+    advice: 'Gradual low-impact aerobic walking. Maintain regular sleep schedule.\nहल्की वॉक करें। सोने का समय नियमित रखें।',
   },
 ];
 
@@ -126,7 +126,7 @@ export function QuickRxModal({
     },
   ]);
   const [advice, setAdvice] = useState<string>(
-    'Maintain spine ergonomics. Avoid lifting heavy weights.'
+    'Maintain spine ergonomics. Avoid lifting heavy weights.\nकमर सीधी रखें। भारी वजन न उठाएं और आगे न झुकें।'
   );
   const [isPending, startTransition] = useTransition();
   const [saveSuccess, setSaveSuccess] = useState(false);

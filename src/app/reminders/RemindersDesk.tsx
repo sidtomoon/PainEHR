@@ -27,6 +27,7 @@ export function RemindersDesk({
 }: Props) {
   const [appointments, setAppointments] = useState<AppointmentWithPatient[]>(initialAppointments);
   const [filter, setFilter] = useState<'tomorrow' | 'today' | 'all'>('tomorrow');
+  const [language, setLanguage] = useState<'bilingual' | 'en' | 'hi'>('bilingual');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -42,10 +43,19 @@ export function RemindersDesk({
   const buildReminderText = (appt: AppointmentWithPatient) => {
     const p = appt.patient;
     const typeLabel = TYPE_LABELS[appt.appointment_type] || 'Consultation';
+    const typeHindi = appt.appointment_type === 'procedure' ? 'प्रोसीजर / इंजेक्शन' : 'फॉलो-अप परामर्श';
     const timeStr = appt.scheduled_time ? ` at ${appt.scheduled_time}` : '';
+    const timeHindi = appt.scheduled_time ? `, समय: ${appt.scheduled_time}` : '';
     const locStr = appt.location ? `\nLocation: ${appt.location}` : '';
+    const locHindi = appt.location ? `\nस्थान: ${appt.location}` : '';
 
-    return `Hello ${p.name}, this is a friendly reminder for your upcoming *${typeLabel}* visit at Dr. Varun's Pain Clinic on *${appt.scheduled_date}*${timeStr}.${locStr}\n\nPlease bring any recent MRI/X-ray films and your current medication list.\nIf you need to reschedule or have any queries, please reply to this message.`;
+    const enText = `Hello ${p.name}, this is a reminder for your upcoming *${typeLabel}* visit at Dr. Varun's Pain Clinic on *${appt.scheduled_date}*${timeStr}.${locStr}\nPlease bring any recent MRI/X-ray films and current medication list.\nIf you need to reschedule or have queries, reply to this message.`;
+
+    const hiText = `नमस्ते ${p.name}, डॉ. वरुण पेन क्लिनिक में आपके *${typeHindi}* अपॉइंटमेंट का रिमाइंडर:\nदिनांक: *${appt.scheduled_date}*${timeHindi}.${locHindi}\nकृपया अपनी पुरानी MRI/X-Ray रिपोर्ट और चल रही दवाइयों की पर्ची साथ लाएं।\nकिसी भी सवाल या अपॉइंटमेंट बदलने के लिए इसी मैसेज पर रिप्लाई करें।`;
+
+    if (language === 'en') return enText;
+    if (language === 'hi') return hiText;
+    return `*APPOINTMENT REMINDER / अपॉइंटमेंट रिमाइंडर*\n*Dr. Varun's Pain Clinic (डॉ. वरुण पेन क्लिनिक)*\n\n${enText}\n\n─────────────\n${hiText}`;
   };
 
   const handleSendWhatsApp = (appt: AppointmentWithPatient) => {
@@ -115,13 +125,13 @@ export function RemindersDesk({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold">
+      {/* Filter Tabs & Language Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold overflow-x-auto">
           <button
             type="button"
             onClick={() => setFilter('tomorrow')}
-            className={`py-1.5 px-3 rounded-md transition ${
+            className={`py-1.5 px-3 rounded-md transition whitespace-nowrap ${
               filter === 'tomorrow'
                 ? 'bg-white text-emerald-800 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -132,7 +142,7 @@ export function RemindersDesk({
           <button
             type="button"
             onClick={() => setFilter('today')}
-            className={`py-1.5 px-3 rounded-md transition ${
+            className={`py-1.5 px-3 rounded-md transition whitespace-nowrap ${
               filter === 'today'
                 ? 'bg-white text-emerald-800 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -143,7 +153,7 @@ export function RemindersDesk({
           <button
             type="button"
             onClick={() => setFilter('all')}
-            className={`py-1.5 px-3 rounded-md transition ${
+            className={`py-1.5 px-3 rounded-md transition whitespace-nowrap ${
               filter === 'all'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -153,8 +163,43 @@ export function RemindersDesk({
           </button>
         </div>
 
-        <div className="text-xs text-slate-500 font-medium hidden sm:block">
-          Showing {filtered.length} patients
+        {/* Language Selector */}
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs font-semibold self-start sm:self-center">
+          <span className="text-[10px] text-slate-500 uppercase px-1">Lang:</span>
+          <button
+            type="button"
+            onClick={() => setLanguage('bilingual')}
+            className={`py-1 px-2 rounded transition text-[11px] ${
+              language === 'bilingual'
+                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            title="English + हिन्दी (Recommended for OPD)"
+          >
+            English + हिन्दी
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`py-1 px-2 rounded transition text-[11px] ${
+              language === 'en'
+                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('hi')}
+            className={`py-1 px-2 rounded transition text-[11px] ${
+              language === 'hi'
+                ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            हिन्दी
+          </button>
         </div>
       </div>
 

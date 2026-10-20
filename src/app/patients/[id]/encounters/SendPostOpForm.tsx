@@ -13,7 +13,7 @@ interface Props {
 export function SendPostOpForm({ patient, encounter }: Props) {
   const [open, setOpen] = useState(false);
   const [instructions, setInstructions] = useState(
-    '1. Rest for 24 hours. Keep injection site dressing clean and dry.\n2. Avoid heavy lifting, twisting, or vigorous exercise for 3 days.\n3. Mild injection site soreness is normal — apply cold pack 15 mins as needed.\n4. Contact clinic immediately if: high fever (>100.4°F), new lower limb numbness, weakness, or severe headache occurs.'
+    '1. Rest for 24 hours. Keep injection site dressing clean and dry.\n2. Avoid heavy lifting, twisting, or vigorous exercise for 3 days.\n3. Mild injection site soreness is normal — apply cold ice pack 15 mins as needed.\n4. Contact clinic immediately if: high fever (>100.4°F), new lower limb numbness, weakness, or severe headache occurs.\n\nहिंदी निर्देश (Hindi Care Instructions):\n१. २४ घंटे पूरा आराम करें। सुई वाली पट्टी को साफ और सूखा रखें।\n२. अगले ३ दिनों तक भारी सामान उठाना या आगे झुकना बंद रखें।\n३. सुई वाली जगह पर दर्द होने पर १५ मिनट बर्फ की सिकाई करें।\n४. यदि तेज बुखार, पैरों में कमजोरी, सुन्नपन या तेज सिरदर्द हो, तो तुरंत क्लिनिक संपर्क करें।'
   );
 
   const phone = patient.phone;
