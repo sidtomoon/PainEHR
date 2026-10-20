@@ -169,6 +169,7 @@ export function CaptureFlow({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const [transcript, setTranscript] = useState('');
+  const [interimSpeech, setInterimSpeech] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -255,7 +256,7 @@ export function CaptureFlow({
     handlePhotoFile(file);
   }
 
-  function toggleRecording() {
+  function startRecording() {
     type SpeechRecognitionLike = {
       continuous: boolean; interimResults: boolean; lang: string;
       onresult: ((e: unknown) => void) | null; onerror: (() => void) | null; onend: (() => void) | null;
@@ -264,31 +265,92 @@ export function CaptureFlow({
     const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike })
       .SpeechRecognition || (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
     if (!SR) return;
-    if (isRecording) {
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-IN';
-    let finalTranscript = transcript ? transcript + ' ' : '';
-    recognition.onresult = (event) => {
-      const e = event as { resultIndex: number; results: { isFinal: boolean; [i: number]: { transcript: string } }[] };
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const chunk = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalTranscript += chunk + ' ';
-        else interim += chunk;
+
+    try {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
       }
-      setTranscript((finalTranscript + interim).trim());
-    };
-    recognition.onerror = () => setIsRecording(false);
-    recognition.onend = () => setIsRecording(false);
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsRecording(true);
+      const recognition = new SR();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-IN';
+
+      recognition.onresult = (event) => {
+        const e = event as { resultIndex: number; results: { isFinal: boolean; [i: number]: { transcript: string } }[] };
+        let interim = '';
+        let finalChunk = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          const text = res[0]?.transcript || '';
+          if (res.isFinal) {
+            finalChunk += text + ' ';
+          } else {
+            interim += text;
+          }
+        }
+
+        // Functional update ensures whatever the clinician manually typed or corrected
+        // in the textarea is 100% PRESERVED, and new speech appends to the end
+        if (finalChunk.trim()) {
+          setTranscript((prev) => {
+            const base = prev.trim();
+            const addition = finalChunk.trim();
+            return base ? `${base} ${addition}` : addition;
+          });
+        }
+        setInterimSpeech(interim);
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+        setInterimSpeech('');
+      };
+      recognition.onend = () => {
+        setIsRecording(false);
+        setInterimSpeech('');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsRecording(true);
+    } catch {
+      setIsRecording(false);
+      setInterimSpeech('');
+    }
+  }
+
+  function stopRecording() {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+    setInterimSpeech('');
+  }
+
+  function toggleRecording() {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }
+
+  function appendPunctuation(symbol: string) {
+    setTranscript((prev) => {
+      const trimmed = prev.trimEnd();
+      if (!trimmed) return '';
+      if (symbol === '\n') return `${trimmed}\n\n`;
+      return `${trimmed}${symbol} `;
+    });
+  }
+
+  function appendPhrase(phrase: string) {
+    setTranscript((prev) => {
+      const trimmed = prev.trimEnd();
+      if (!trimmed) return phrase;
+      return `${trimmed}\n${phrase} `;
+    });
   }
 
   async function runExtraction() {
@@ -492,24 +554,131 @@ export function CaptureFlow({
         {captureMode === 'voice' && (
           <div className="space-y-3">
             {speechSupported ? (
-              <button
-                onClick={toggleRecording}
-                className={`w-full rounded-lg py-3 text-sm font-medium ${isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-slate-800 text-white'}`}
-              >
-                {isRecording ? '⏹ Stop recording' : '🎙️ Start recording'}
-              </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`flex-1 rounded-lg py-3 text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition ${
+                      isRecording
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    }`}
+                  >
+                    <span>{isRecording ? '⏹' : '🎙️'}</span>
+                    <span>{isRecording ? 'Stop Dictation' : transcript ? 'Resume Dictating' : 'Start Dictation'}</span>
+                  </button>
+
+                  {isRecording && (
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="px-4 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold flex items-center gap-1 shadow-sm transition"
+                      title="Pause microphone so you can edit quietly"
+                    >
+                      <span>⏸️</span>
+                      <span>Pause & Edit</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Live speech feedback pill */}
+                {isRecording && (
+                  <div className="bg-teal-50 border border-teal-200 rounded-lg p-2.5 flex items-center gap-2 text-xs text-teal-900 animate-fadeIn">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                    </span>
+                    <span className="font-semibold">Live Hearing:</span>
+                    <span className="italic truncate text-teal-800">
+                      {interimSpeech ? `"${interimSpeech}"` : 'Listening… speak naturally into microphone'}
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                Voice recognition isn&apos;t supported in this browser — type or paste the transcript below.
+                Voice recognition isn&apos;t supported in this browser — you can type or paste your clinical notes below.
               </div>
             )}
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Transcript appears here as you speak — or type/paste it directly."
-              rows={6}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+
+            {/* Quick punctuation and section formatting toolbar */}
+            <div className="flex items-center justify-between gap-1 flex-wrap pt-1">
+              <div className="flex items-center gap-1 flex-wrap text-[11px]">
+                <span className="text-slate-400 mr-1 font-medium">Quick Insert:</span>
+                <button
+                  type="button"
+                  onClick={() => appendPunctuation('.')}
+                  className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono border border-slate-200"
+                >
+                  . (Full Stop)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => appendPunctuation(',')}
+                  className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono border border-slate-200"
+                >
+                  , (Comma)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => appendPunctuation('\n')}
+                  className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono border border-slate-200"
+                >
+                  ↵ (New Line)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => appendPhrase('Chief Complaint:')}
+                  className="px-2 py-0.5 rounded bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-medium"
+                >
+                  + CC:
+                </button>
+                <button
+                  type="button"
+                  onClick={() => appendPhrase('Examination:')}
+                  className="px-2 py-0.5 rounded bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-medium"
+                >
+                  + Exam:
+                </button>
+                <button
+                  type="button"
+                  onClick={() => appendPhrase('Plan / Rx:')}
+                  className="px-2 py-0.5 rounded bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-medium"
+                >
+                  + Plan:
+                </button>
+              </div>
+
+              {transcript && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Clear dictation text?')) {
+                      setTranscript('');
+                      setInterimSpeech('');
+                    }
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-rose-600 transition"
+                >
+                  🗑️ Clear
+                </button>
+              )}
+            </div>
+
+            <div className="relative">
+              <textarea
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
+                placeholder="Dictate or type clinical notes here... You can freely edit and correct text at any time."
+                rows={7}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              />
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              💡 <strong>Edit on the go</strong>: You can click inside the box to fix typos or rephrase words manually. New speech will append cleanly without overwriting your manual edits.
+            </p>
           </div>
         )}
 
