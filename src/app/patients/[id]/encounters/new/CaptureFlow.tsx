@@ -242,13 +242,17 @@ export function CaptureFlow({
     ? activeRule.directedLocations
     : PAIN_LOCATIONS;
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function handlePhotoFile(file: File | undefined | null) {
     if (!file) return;
     setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result as string);
     reader.readAsDataURL(file);
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    handlePhotoFile(file);
   }
 
   function toggleRecording() {
@@ -394,15 +398,95 @@ export function CaptureFlow({
           </button>
         </div>
 
-        {captureMode === 'photo' && (
-          <label className="block border-2 border-dashed border-slate-200 rounded-lg py-8 text-center cursor-pointer hover:border-teal-300 transition">
-            <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} className="hidden" />
-            {photoPreview ? (
-              <img src={photoPreview} alt="capture preview" className="max-h-64 mx-auto rounded shadow-sm" />
-            ) : (
-              <div className="text-slate-400 text-sm">Tap to take or choose a photo</div>
-            )}
-          </label>
+        {captureMode === 'photo' && !photoPreview && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Option 1: Live Camera Capture */}
+              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-teal-300 bg-teal-50/40 rounded-xl cursor-pointer hover:bg-teal-50 hover:border-teal-400 transition text-center group shadow-xs">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">📸</span>
+                <span className="text-sm font-semibold text-slate-800">Take Photo (Camera)</span>
+                <span className="text-xs text-slate-500 mt-1">
+                  Snap live photo of handwritten notes or prescription
+                </span>
+              </label>
+
+              {/* Option 2: Upload from Photo Gallery or Files */}
+              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 bg-slate-50/60 rounded-xl cursor-pointer hover:bg-slate-100 hover:border-slate-400 transition text-center group shadow-xs">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">🖼️</span>
+                <span className="text-sm font-semibold text-slate-800">Choose from Gallery / Files</span>
+                <span className="text-xs text-slate-500 mt-1">
+                  Upload existing photo, screenshot, or scanned report
+                </span>
+              </label>
+            </div>
+
+            <p className="text-[11px] text-center text-slate-400">
+              Supports JPG, PNG, WEBP, HEIC · AI extracts diagnosis, pain scores, medications & plan
+            </p>
+          </div>
+        )}
+
+        {captureMode === 'photo' && photoPreview && (
+          <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs space-y-3">
+            <div className="relative group flex justify-center bg-slate-50 rounded-lg p-2 border border-slate-100">
+              <img
+                src={photoPreview}
+                alt="capture preview"
+                className="max-h-72 rounded-lg object-contain shadow-xs"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setPhotoFile(null);
+                  setPhotoPreview(null);
+                }}
+                className="absolute top-4 right-4 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full p-2 shadow-md transition"
+                title="Remove photo"
+              >
+                <span className="text-xs font-bold leading-none block px-1">✕</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-1 border-t border-slate-100">
+              <span className="truncate max-w-[220px] font-medium text-slate-700">
+                📄 {photoFile?.name || 'Selected Image'}
+              </span>
+              <div className="flex items-center gap-2">
+                <label className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer text-xs bg-teal-50 px-2.5 py-1 rounded border border-teal-200">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                  📁 Choose File
+                </label>
+                <label className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer text-xs bg-teal-50 px-2.5 py-1 rounded border border-teal-200">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                  📸 Retake
+                </label>
+              </div>
+            </div>
+          </div>
         )}
 
         {captureMode === 'voice' && (
@@ -1256,13 +1340,13 @@ export function CaptureFlow({
 
 function HiddenFileInput({ file }: { file: File }) {
   const ref = useRef<HTMLInputElement>(null);
-  const assigned = useRef(false);
-  if (ref.current && !assigned.current) {
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    ref.current.files = dt.files;
-    assigned.current = true;
-  }
+  useEffect(() => {
+    if (ref.current && file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      ref.current.files = dt.files;
+    }
+  }, [file]);
   return <input ref={ref} type="file" name="attachment" className="hidden" readOnly />;
 }
 
