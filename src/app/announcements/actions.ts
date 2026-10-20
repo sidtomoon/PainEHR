@@ -54,3 +54,17 @@ export async function createAnnouncement(_prevState: unknown, formData: FormData
   revalidatePath('/announcements');
   return { status: 'sent' as const, message: `Sent to ${sent} patient${sent === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.` };
 }
+
+export async function logAnnouncement(message: string) {
+  const clean = message && message.trim();
+  if (!clean) return { status: 'error' as const, message: 'Enter a message.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('announcements')
+    .insert({ message: clean, sent_at: new Date().toISOString() });
+
+  if (error) return { status: 'error' as const, message: error.message };
+  revalidatePath('/announcements');
+  return { status: 'sent' as const, message: 'Announcement logged in clinic history.' };
+}

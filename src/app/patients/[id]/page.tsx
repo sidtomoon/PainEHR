@@ -195,7 +195,7 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
                   </div>
                   {appt.appointment_type === 'procedure' && (
                     <div className="mt-1.5">
-                      <SendPreOpForm patientId={patient.id} appointmentId={appt.id} />
+                      <SendPreOpForm patient={patient} appointment={appt} />
                     </div>
                   )}
                 </div>
@@ -301,7 +301,7 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
                       <DetailRow label="Immediate complications" value={enc.immediate_complications} />
                       <DetailRow label="Planned follow-up interval" value={enc.planned_followup_interval} />
                       <div className="pt-1">
-                        <SendPostOpForm patientId={patient.id} encounterId={enc.id} />
+                        <SendPostOpForm patient={patient} encounter={enc} />
                       </div>
                     </>
                   )}
