@@ -8,6 +8,7 @@ import { DirectedHistorySection } from './DirectedHistorySection';
 import { ManagementProtocolsSection } from './ManagementProtocolsSection';
 import { NonInvasiveRxBuilder } from './NonInvasiveRxBuilder';
 import { SmartPhrasesPicker } from '@/app/components/SmartPhrasesPicker';
+import { updatePatientDemographics } from '@/app/patients/actions';
 import {
   matchClinicalRule,
   isCancerDiagnosis,
@@ -195,6 +196,43 @@ export function CaptureFlow({
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleLocation, setScheduleLocation] = useState('');
 
+  // Retrospective Demographics from OPD Card
+  const [extractedDemographics, setExtractedDemographics] = useState<{
+    cr_no?: string | null;
+    name?: string | null;
+    age?: number | null;
+    sex?: string | null;
+    phone?: string | null;
+  } | null>(null);
+  const [demoCrNo, setDemoCrNo] = useState('');
+  const [demoName, setDemoName] = useState('');
+  const [demoAge, setDemoAge] = useState('');
+  const [demoSex, setDemoSex] = useState('');
+  const [demoPhone, setDemoPhone] = useState('');
+  const [applyDemographics, setApplyDemographics] = useState(true);
+  const [demographicsSavedNotice, setDemographicsSavedNotice] = useState<string | null>(null);
+
+  async function handleInstantDemographicsUpdate() {
+    setDemographicsSavedNotice('Updating chart…');
+    try {
+      const res = await updatePatientDemographics(patientId, {
+        patient_code: demoCrNo || undefined,
+        name: demoName || undefined,
+        age: demoAge ? Number(demoAge) : undefined,
+        sex: (demoSex as 'M' | 'F' | 'Other') || undefined,
+        phone: demoPhone || undefined,
+      });
+      if (res.status === 'success') {
+        setDemographicsSavedNotice('✓ Master patient chart updated successfully!');
+      } else {
+        setDemographicsSavedNotice(`Error: ${res.message}`);
+      }
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setDemographicsSavedNotice(`Error: ${err?.message || 'Failed to update'}`);
+    }
+  }
+
   function set<K extends keyof Fields>(key: K, value: Fields[K]) {
     setFields((f) => ({ ...f, [key]: value }));
   }
@@ -371,6 +409,19 @@ export function CaptureFlow({
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+
+      // Check for extracted demographics from OPD card
+      const demo = data.demographics;
+      if (demo && (demo.cr_no || demo.name || demo.age || demo.sex || demo.phone)) {
+        setExtractedDemographics(demo);
+        if (demo.cr_no) setDemoCrNo(demo.cr_no);
+        if (demo.name) setDemoName(demo.name);
+        if (demo.age !== null && demo.age !== undefined) setDemoAge(String(demo.age));
+        if (demo.sex) setDemoSex(demo.sex);
+        if (demo.phone) setDemoPhone(demo.phone);
+        setApplyDemographics(true);
+        setDemographicsSavedNotice(null);
+      }
 
       setFields(withCarryForward({
         ...BASE_EMPTY_FIELDS,
@@ -789,6 +840,104 @@ export function CaptureFlow({
 
         {captureMode === 'photo' && photoFile && (
           <HiddenFileInput file={photoFile} />
+        )}
+
+        {/* ── Retrospective Demographic Update Card from OPD Card Scan ── */}
+        {extractedDemographics && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50/40 border border-amber-200 rounded-xl p-3.5 shadow-xs space-y-2">
+            <div className="flex items-center justify-between pb-2 border-b border-amber-200/60">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-950">
+                <span>📋</span>
+                <span>OPD Card Demographics Detected by AI</span>
+              </div>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-amber-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyDemographics}
+                  onChange={(e) => setApplyDemographics(e.target.checked)}
+                  className="rounded border-amber-300 text-teal-600 focus:ring-teal-500"
+                />
+                <span>Update Patient Chart Retrospectively</span>
+              </label>
+            </div>
+
+            <p className="text-[11px] text-amber-800">
+              Hospital registration details were found on the uploaded OPD card image. Verify or edit them below to backfill the patient&apos;s chart profile:
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="bg-white p-2 rounded-lg border border-amber-200 shadow-xs">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">CR / Reg No.</span>
+                <input
+                  value={demoCrNo}
+                  onChange={(e) => setDemoCrNo(e.target.value)}
+                  placeholder="e.g. CR-12345"
+                  className="w-full font-mono font-bold text-slate-900 text-xs focus:outline-none"
+                />
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-amber-200 shadow-xs">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Name</span>
+                <input
+                  value={demoName}
+                  onChange={(e) => setDemoName(e.target.value)}
+                  placeholder="Patient Name"
+                  className="w-full font-bold text-slate-900 text-xs focus:outline-none"
+                />
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-amber-200 shadow-xs">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Age / Sex</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={demoAge}
+                    onChange={(e) => setDemoAge(e.target.value)}
+                    placeholder="Age"
+                    className="w-12 font-bold text-slate-900 text-xs focus:outline-none"
+                  />
+                  <span className="text-slate-400">/</span>
+                  <select
+                    value={demoSex}
+                    onChange={(e) => setDemoSex(e.target.value)}
+                    className="font-bold text-slate-900 text-xs focus:outline-none bg-transparent"
+                  >
+                    <option value="">—</option>
+                    <option value="M">M</option>
+                    <option value="F">F</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div className="bg-white p-2 rounded-lg border border-amber-200 shadow-xs">
+                <span className="block text-[10px] text-slate-500 uppercase font-semibold">Phone</span>
+                <input
+                  value={demoPhone}
+                  onChange={(e) => setDemoPhone(e.target.value)}
+                  placeholder="Phone No."
+                  className="w-full font-medium text-slate-900 text-xs focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 text-[11px]">
+              <span className="text-amber-800 font-medium">
+                {demographicsSavedNotice || (applyDemographics ? '✓ Will backfill patient master record on saving encounter' : 'Demographic sync unchecked')}
+              </span>
+              <button
+                type="button"
+                onClick={handleInstantDemographicsUpdate}
+                className="px-2.5 py-1 rounded bg-amber-800 hover:bg-amber-900 text-white font-medium text-[11px] transition shadow-xs"
+              >
+                ⚡ Update Chart Now
+              </button>
+            </div>
+
+            <input type="hidden" name="update_patient_demographics" value={applyDemographics ? 'yes' : 'no'} />
+            <input type="hidden" name="demographics_cr_no" value={demoCrNo} />
+            <input type="hidden" name="demographics_name" value={demoName} />
+            <input type="hidden" name="demographics_age" value={demoAge} />
+            <input type="hidden" name="demographics_sex" value={demoSex} />
+            <input type="hidden" name="demographics_phone" value={demoPhone} />
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-3">

@@ -47,3 +47,47 @@ export async function createPatient(_prevState: unknown, formData: FormData) {
   revalidatePath('/patients');
   redirect(`/patients/${data.id}`);
 }
+
+/**
+ * Retrospectively updates patient demographic fields (CR No., Name, Age, Sex, Phone)
+ * extracted from an OPD card or modified by the clinician.
+ */
+export async function updatePatientDemographics(
+  patientId: string,
+  demographics: {
+    name?: string | null;
+    patient_code?: string | null;
+    age?: number | null;
+    sex?: SexType | null;
+    phone?: string | null;
+  },
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { status: 'error' as const, message: 'Unauthorized' };
+
+  const updates: Record<string, unknown> = {};
+  if (demographics.name && demographics.name.trim()) updates.name = demographics.name.trim();
+  if (demographics.patient_code && demographics.patient_code.trim()) updates.patient_code = demographics.patient_code.trim();
+  if (demographics.age !== undefined && demographics.age !== null) updates.age = demographics.age;
+  if (demographics.sex) updates.sex = demographics.sex;
+  if (demographics.phone !== undefined) updates.phone = demographics.phone ? demographics.phone.trim() : null;
+
+  if (Object.keys(updates).length === 0) {
+    return { status: 'success' as const, message: 'No demographic changes to apply.' };
+  }
+
+  const { error } = await supabase
+    .from('patients')
+    .update(updates)
+    .eq('id', patientId);
+
+  if (error) {
+    const msg = error.code === '23505' ? `CR No. "${demographics.patient_code}" is already in use by another patient.` : error.message;
+    return { status: 'error' as const, message: msg };
+  }
+
+  revalidatePath(`/patients/${patientId}`);
+  revalidatePath('/patients');
+  return { status: 'success' as const, message: 'Patient demographics updated successfully.' };
+}

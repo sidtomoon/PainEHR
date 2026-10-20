@@ -241,6 +241,30 @@ export async function saveEncounter(patientId: string, formData: FormData) {
     });
   }
 
+  // --- Retrospective Patient Demographics Update from OPD Card ---
+  if (str(formData, 'update_patient_demographics') === 'yes') {
+    try {
+      const pCode = str(formData, 'demographics_cr_no');
+      const pName = str(formData, 'demographics_name');
+      const pAge = num(formData, 'demographics_age');
+      const pSex = str(formData, 'demographics_sex');
+      const pPhone = str(formData, 'demographics_phone');
+
+      const pUpdates: Record<string, unknown> = {};
+      if (pCode) pUpdates.patient_code = pCode;
+      if (pName) pUpdates.name = pName;
+      if (pAge !== null) pUpdates.age = pAge;
+      if (pSex && ['M', 'F', 'Other'].includes(pSex)) pUpdates.sex = pSex;
+      if (pPhone) pUpdates.phone = pPhone;
+
+      if (Object.keys(pUpdates).length > 0) {
+        await supabase.from('patients').update(pUpdates).eq('id', patientId);
+      }
+    } catch (demoErr) {
+      console.warn('Failed to update patient demographics retrospectively:', demoErr);
+    }
+  }
+
   revalidatePath(`/patients/${patientId}`);
   redirect(`/patients/${patientId}/encounters/${encounter.id}/prescription?created=true`);
 }
