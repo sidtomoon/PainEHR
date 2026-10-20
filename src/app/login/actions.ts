@@ -76,62 +76,92 @@ export async function verifyCode(_prevState: unknown, formData: FormData) {
  * 1-Click Login for Lead Doctor / Admin (sidtomoon@gmail.com)
  */
 export async function devLogin() {
-  const serviceClient = createServiceClient();
-  const origin = await getOrigin();
-  const { data, error } = await serviceClient.auth.admin.generateLink({
-    type: 'magiclink',
-    email: 'sidtomoon@gmail.com',
-    options: { redirectTo: `${origin}/auth/confirm` },
-  });
+  try {
+    const serviceClient = createServiceClient();
+    const origin = await getOrigin();
+    const { data, error } = await serviceClient.auth.admin.generateLink({
+      type: 'magiclink',
+      email: 'sidtomoon@gmail.com',
+      options: { redirectTo: `${origin}/auth/confirm` },
+    });
 
-  if (error || !data?.properties) {
-    throw new Error(error?.message || 'Failed to generate admin login link');
+    if (error || !data?.properties) {
+      redirect(`/login?error=${encodeURIComponent(error?.message || 'Failed to generate admin login link')}`);
+    }
+
+    // Use relative internal token_hash redirect so it never redirects to localhost across devices
+    if (data.properties.hashed_token) {
+      redirect(`/auth/confirm?token_hash=${data.properties.hashed_token}&type=email`);
+    }
+
+    redirect(data.properties.action_link);
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string; code?: string; digest?: string };
+    if (errorObj?.message === 'NEXT_REDIRECT' || errorObj?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw err;
+    }
+    const isPaused =
+      errorObj?.message?.includes('fetch failed') ||
+      errorObj?.code === 'ENOTFOUND' ||
+      errorObj?.message?.includes('ENOTFOUND');
+    const msg = isPaused
+      ? 'Database is paused on Supabase due to inactivity. Please restore it in your Supabase dashboard.'
+      : errorObj?.message || 'Failed to generate admin login link';
+    redirect(`/login?error=${encodeURIComponent(msg)}`);
   }
-
-  // Use relative internal token_hash redirect so it never redirects to localhost across devices
-  if (data.properties.hashed_token) {
-    redirect(`/auth/confirm?token_hash=${data.properties.hashed_token}&type=email`);
-  }
-
-  redirect(data.properties.action_link);
 }
 
 /**
  * 1-Click Login for Data Entry Staff accounts (Operator 1, Operator 2)
  */
 export async function devStaffLogin(staffNumber: number = 1) {
-  const serviceClient = createServiceClient();
-  const origin = await getOrigin();
-  const staffEmail = `dataentry${staffNumber}@painehr.com`;
-  const staffName = `Data Entry Staff ${staffNumber}`;
-
-  // Ensure staff user is registered in Supabase auth
   try {
-    await serviceClient.auth.admin.createUser({
+    const serviceClient = createServiceClient();
+    const origin = await getOrigin();
+    const staffEmail = `dataentry${staffNumber}@painehr.com`;
+    const staffName = `Data Entry Staff ${staffNumber}`;
+
+    // Ensure staff user is registered in Supabase auth
+    try {
+      await serviceClient.auth.admin.createUser({
+        email: staffEmail,
+        email_confirm: true,
+        user_metadata: { role: 'data_entry', display_name: staffName },
+      });
+    } catch {
+      // User already created
+    }
+
+    const { data, error } = await serviceClient.auth.admin.generateLink({
+      type: 'magiclink',
       email: staffEmail,
-      email_confirm: true,
-      user_metadata: { role: 'data_entry', display_name: staffName },
+      options: { redirectTo: `${origin}/auth/confirm` },
     });
-  } catch {
-    // User already created
+
+    if (error || !data?.properties) {
+      redirect(`/login?error=${encodeURIComponent(error?.message || 'Failed to generate staff login link')}`);
+    }
+
+    // Use relative internal token_hash redirect so it never redirects to localhost across devices
+    if (data.properties.hashed_token) {
+      redirect(`/auth/confirm?token_hash=${data.properties.hashed_token}&type=email`);
+    }
+
+    redirect(data.properties.action_link);
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string; code?: string; digest?: string };
+    if (errorObj?.message === 'NEXT_REDIRECT' || errorObj?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw err;
+    }
+    const isPaused =
+      errorObj?.message?.includes('fetch failed') ||
+      errorObj?.code === 'ENOTFOUND' ||
+      errorObj?.message?.includes('ENOTFOUND');
+    const msg = isPaused
+      ? 'Database is paused on Supabase due to inactivity. Please restore it in your Supabase dashboard.'
+      : errorObj?.message || 'Failed to generate staff login link';
+    redirect(`/login?error=${encodeURIComponent(msg)}`);
   }
-
-  const { data, error } = await serviceClient.auth.admin.generateLink({
-    type: 'magiclink',
-    email: staffEmail,
-    options: { redirectTo: `${origin}/auth/confirm` },
-  });
-
-  if (error || !data?.properties) {
-    throw new Error(error?.message || 'Failed to generate staff login link');
-  }
-
-  // Use relative internal token_hash redirect so it never redirects to localhost across devices
-  if (data.properties.hashed_token) {
-    redirect(`/auth/confirm?token_hash=${data.properties.hashed_token}&type=email`);
-  }
-
-  redirect(data.properties.action_link);
 }
 
 /**
@@ -144,11 +174,28 @@ export async function signInWithPassword(_prevState: unknown, formData: FormData
     return { status: 'error' as const, message: 'Both email and password are required.' };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    return { status: 'error' as const, message: error.message };
+    if (error) {
+      return { status: 'error' as const, message: error.message };
+    }
+  } catch (err: unknown) {
+    const errorObj = err as { message?: string; code?: string; digest?: string };
+    if (errorObj?.message === 'NEXT_REDIRECT' || errorObj?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw err;
+    }
+    const isPaused =
+      errorObj?.message?.includes('fetch failed') ||
+      errorObj?.code === 'ENOTFOUND' ||
+      errorObj?.message?.includes('ENOTFOUND');
+    return {
+      status: 'error' as const,
+      message: isPaused
+        ? 'Database is currently paused on Supabase due to inactivity. Please open Supabase Dashboard and click Restore Project.'
+        : errorObj?.message || 'Failed to connect to database.',
+    };
   }
 
   redirect('/patients');

@@ -1,11 +1,19 @@
 'use client';
 
-import { useState, useActionState } from 'react';
+import { useState, useActionState, useEffect } from 'react';
 import { requestCode, verifyCode, devLogin, devStaffLogin, signInWithPassword } from './actions';
 
 export default function LoginPage() {
   const [tab, setTab] = useState<'admin' | 'staff'>('admin');
   const [adminMode, setAdminMode] = useState<'password' | 'otp'>('password');
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const err = new URLSearchParams(window.location.search).get('error');
+      if (err) setUrlError(err);
+    }
+  }, []);
 
   // Admin OTP states
   const [requestState, requestAction, requestPending] = useActionState(requestCode, null);
@@ -30,6 +38,24 @@ export default function LoginPage() {
             Multi-User
           </span>
         </div>
+
+        {urlError && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+            <div className="font-semibold flex items-center gap-1.5 text-amber-950">
+              <span>⚠️</span>
+              <span>Database Connection Issue</span>
+            </div>
+            <p className="mt-1 text-amber-800">{urlError}</p>
+            <a
+              href="https://supabase.com/dashboard/project/xwvfjqaraeotigztaenj"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-2 bg-amber-800 hover:bg-amber-900 text-white font-medium px-3 py-1.5 rounded text-[11px] transition shadow-xs"
+            >
+              Open Supabase & Click &quot;Restore Project&quot; ↗
+            </a>
+          </div>
+        )}
 
         {/* Role Toggle Tabs */}
         <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg mb-5 text-xs font-medium">
