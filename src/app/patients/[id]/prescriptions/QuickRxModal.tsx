@@ -11,13 +11,15 @@ interface Props {
   onPrescriptionSaved?: () => void;
 }
 
-const COMMON_REGIMENS: {
+export const COMMON_REGIMENS: {
+  id: string;
   name: string;
   badge: string;
   items: PrescriptionItem[];
   advice: string;
 }[] = [
   {
+    id: 'neuro_starter',
     name: 'Neuropathic Pain Starter',
     badge: '⚡ Radiculopathy / Neuropathy',
     items: [
@@ -39,6 +41,7 @@ const COMMON_REGIMENS: {
     advice: 'Report any morning dizziness. Keep posture upright.\nसुबह चक्कर आने पर सूचित करें। बैठते समय कमर सीधी रखें।',
   },
   {
+    id: 'spine_sos',
     name: 'Acute Spine Flare SOS',
     badge: '🔥 Acute Disc / Lumbar Flare',
     items: [
@@ -67,6 +70,7 @@ const COMMON_REGIMENS: {
     advice: 'Strict avoidance of forward bending and weight lifting. Cold pack 15 mins twice daily.\nआगे झुकना और भारी वजन उठाना सख्त मना है। दिन में 2 बार 15 मिनट बर्फ की सिकाई करें।',
   },
   {
+    id: 'post_procedure',
     name: 'Post-Procedure Recovery',
     badge: '💉 Post-Block / Injection',
     items: [
@@ -88,6 +92,7 @@ const COMMON_REGIMENS: {
     advice: 'Rest for 24 hours. Keep injection site clean and dry. Avoid intense physical exertion.\n24 घंटे आराम करें। सुई वाली जगह को सूखा रखें। भारी काम न करें।',
   },
   {
+    id: 'central_fibro',
     name: 'Central Sensitization / Fibromyalgia',
     badge: '🧠 Central Pain / Nociplastic',
     items: [
@@ -107,6 +112,35 @@ const COMMON_REGIMENS: {
       },
     ],
     advice: 'Gradual low-impact aerobic walking. Maintain regular sleep schedule.\nहल्की वॉक करें। सोने का समय नियमित रखें।',
+  },
+  {
+    id: 'knee_oa',
+    name: 'Knee OA Joint Flare',
+    badge: '🦴 Knee / Peripheral Joint',
+    items: [
+      {
+        name: 'Tab Aceclofenac 100mg + Paracetamol 325mg',
+        dosage: '100/325mg',
+        frequency: '1-0-1 (BD)',
+        duration: '5 days',
+        instructions: 'After meals',
+      },
+      {
+        name: 'Cap Pantoprazole 40mg',
+        dosage: '40mg',
+        frequency: '1-0-0 (Empty Stomach)',
+        duration: '5 days',
+        instructions: 'Before breakfast',
+      },
+      {
+        name: 'Cap Diacerein 50mg',
+        dosage: '50mg',
+        frequency: '0-0-1 (Night)',
+        duration: '30 days',
+        instructions: 'After dinner',
+      },
+    ],
+    advice: 'Quadriceps strengthening exercises. Avoid squatting / sitting cross-legged on floor.\nघुटने मजबूत करने की कसरत करें। जमीन पर पालथी मारकर न बैठें।',
   },
 ];
 
@@ -128,15 +162,34 @@ export function QuickRxModal({
   const [advice, setAdvice] = useState<string>(
     'Maintain spine ergonomics. Avoid lifting heavy weights.\nकमर सीधी रखें। भारी वजन न उठाएं और आगे न झुकें।'
   );
+  const [activeRegimenId, setActiveRegimenId] = useState<string | null>(null);
+  const [appendMode, setAppendMode] = useState<boolean>(false);
+  const [regimenFeedback, setRegimenFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleApplyRegimen = (regimen: typeof COMMON_REGIMENS[0]) => {
-    setItems([...regimen.items]);
-    setAdvice(regimen.advice);
+    setActiveRegimenId(regimen.id);
+
+    if (appendMode) {
+      // Append without duplicating blank items
+      setItems((prev) => {
+        const cleaned = prev.filter((it) => it.name.trim().length > 0);
+        return [...cleaned, ...regimen.items.map((it) => ({ ...it }))];
+      });
+      setAdvice((prev) => (prev ? `${prev}\n${regimen.advice}` : regimen.advice));
+      setRegimenFeedback(`✓ Appended ${regimen.name} (${regimen.items.length} items)`);
+    } else {
+      // Replace
+      setItems(regimen.items.map((it) => ({ ...it })));
+      setAdvice(regimen.advice);
+      setRegimenFeedback(`✓ Applied ${regimen.name} (${regimen.items.length} items)`);
+    }
+
+    setTimeout(() => setRegimenFeedback(null), 3000);
   };
 
   const handleAddItem = () => {
@@ -208,9 +261,9 @@ export function QuickRxModal({
     startTransition(async () => {
       const res = await savePrescription(patient.id, validItems, advice);
       if (res.success) {
-        setSaveSuccess(true);
+        setSaveSuccess(res.message || 'Prescription successfully recorded in patient chart!');
         setTimeout(() => {
-          setSaveSuccess(false);
+          setSaveSuccess(null);
           if (onPrescriptionSaved) onPrescriptionSaved();
           onClose();
         }, 1200);
@@ -229,7 +282,7 @@ export function QuickRxModal({
             <span className="text-xl">💊</span>
             <div>
               <h3 className="text-base font-semibold text-slate-900">
-                Quick Rx Pad & WhatsApp Prescription
+                Quick Rx Pad &amp; WhatsApp Prescription
               </h3>
               <p className="text-xs text-slate-500">
                 {patient.name} · {patient.patient_code} · {patient.phone || 'No phone'}
@@ -246,35 +299,77 @@ export function QuickRxModal({
         </div>
 
         {errorMessage && (
-          <div className="mt-3 p-2 text-xs bg-rose-50 text-rose-700 border border-rose-200 rounded-lg">
+          <div className="mt-3 p-2.5 text-xs bg-rose-50 text-rose-700 border border-rose-200 rounded-lg">
             {errorMessage}
           </div>
         )}
 
         {saveSuccess && (
-          <div className="mt-3 p-2 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-medium">
-            ✓ Prescription successfully recorded in patient chart!
+          <div className="mt-3 p-2.5 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-medium flex items-center gap-1.5">
+            <span>✓</span>
+            <span>{saveSuccess}</span>
           </div>
         )}
 
         <div className="overflow-y-auto space-y-4 py-3 flex-1 pr-1">
           {/* Quick Regimen Templates */}
-          <div>
-            <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
-              <span>⚡ 1-Click Pain Regimens:</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {COMMON_REGIMENS.map((reg) => (
+          <div className="bg-slate-50/80 border border-slate-200 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                <span>⚡ 1-Click Pain Regimens</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="text-slate-500">Mode:</span>
                 <button
-                  key={reg.name}
                   type="button"
-                  onClick={() => handleApplyRegimen(reg)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-teal-100 text-slate-800 hover:text-teal-900 border border-slate-200 hover:border-teal-300 transition text-left"
+                  onClick={() => setAppendMode(false)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                    !appendMode
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200'
+                  }`}
                 >
-                  {reg.badge}
+                  Replace
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setAppendMode(true)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                    appendMode
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200'
+                  }`}
+                >
+                  + Append
+                </button>
+              </div>
             </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {COMMON_REGIMENS.map((reg) => {
+                const isActive = activeRegimenId === reg.id;
+                return (
+                  <button
+                    key={reg.id}
+                    type="button"
+                    onClick={() => handleApplyRegimen(reg)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition text-left cursor-pointer flex items-center gap-1 shadow-2xs ${
+                      isActive
+                        ? 'bg-teal-600 text-white border-teal-700 ring-2 ring-teal-300'
+                        : 'bg-white hover:bg-teal-50 text-slate-800 hover:text-teal-900 border-slate-300 hover:border-teal-400'
+                    }`}
+                  >
+                    <span>{reg.badge}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {regimenFeedback && (
+              <div className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1 pt-1 animate-fadeIn">
+                <span>{regimenFeedback}</span>
+              </div>
+            )}
           </div>
 
           {/* Medicines Table */}
@@ -362,7 +457,7 @@ export function QuickRxModal({
           {/* Advice / Instructions */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1">
-              General Advice & Precautions
+              General Advice &amp; Precautions
             </label>
             <textarea
               rows={2}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useActionState } from 'react';
 import { createPatient } from '@/app/patients/actions';
+import { compressImage } from '@/lib/image-compress';
 
 export default function NewPatientPage() {
   const [state, action, pending] = useActionState(createPatient, null);
@@ -21,27 +22,20 @@ export default function NewPatientPage() {
   async function handleOpdCardFile(file: File | undefined | null) {
     if (!file) return;
     setScanError(null);
-    setScanMessage('Scanning OPD card with AI… reading CR No, name, age, and sex…');
+    setScanMessage('Compressing and scanning OPD card with Antigravity AI (Gemini Flash)…');
     setIsScanning(true);
 
     try {
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(file);
-      const dataUrl = await base64Promise;
-      setScannedImagePreview(dataUrl);
+      const compressed = await compressImage(file, 1600, 0.82);
+      setScannedImagePreview(compressed.dataUrl);
 
-      const base64 = dataUrl.split(',')[1];
       const res = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'photo',
-          imageBase64: base64,
-          mediaType: file.type || 'image/jpeg',
+          imageBase64: compressed.base64,
+          mediaType: compressed.mediaType,
         }),
       });
 

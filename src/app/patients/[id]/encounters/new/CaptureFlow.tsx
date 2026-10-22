@@ -7,8 +7,10 @@ import { DiagnosisCodeInput } from './DiagnosisCodeInput';
 import { DirectedHistorySection } from './DirectedHistorySection';
 import { ManagementProtocolsSection } from './ManagementProtocolsSection';
 import { NonInvasiveRxBuilder } from './NonInvasiveRxBuilder';
+import { ScoreSelector, PainRegimensBar } from './EncounterScoreComponents';
 import { SmartPhrasesPicker } from '@/app/components/SmartPhrasesPicker';
 import { updatePatientDemographics } from '@/app/patients/actions';
+import { compressImage } from '@/lib/image-compress';
 import {
   matchClinicalRule,
   isCancerDiagnosis,
@@ -166,8 +168,17 @@ export function CaptureFlow({
   const [step, setStep] = useState<'capture' | 'review'>('capture');
   const [captureMode, setCaptureMode] = useState<CaptureSource | null>(null);
 
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<Array<{
+    id: string;
+    name: string;
+    file: File;
+    preview: string;
+    base64: string;
+    mediaType: string;
+    originalSize: number;
+    compressedSize: number;
+  }>>([]);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const [transcript, setTranscript] = useState('');
   const [interimSpeech, setInterimSpeech] = useState('');
@@ -281,17 +292,42 @@ export function CaptureFlow({
     ? activeRule.directedLocations
     : PAIN_LOCATIONS;
 
-  function handlePhotoFile(file: File | undefined | null) {
-    if (!file) return;
-    setPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setPhotoPreview(reader.result as string);
-    reader.readAsDataURL(file);
+  async function handleAddPhotos(incomingFiles: FileList | File[] | null | undefined) {
+    if (!incomingFiles) return;
+    const filesArray = Array.from(incomingFiles).filter((f) => f && f.size > 0);
+    if (filesArray.length === 0) return;
+
+    setIsCompressing(true);
+    try {
+      const added: typeof photos = [];
+      for (let i = 0; i < filesArray.length; i++) {
+        const file = filesArray[i];
+        const compressed = await compressImage(file, 1600, 0.82);
+        added.push({
+          id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name || `Photo ${photos.length + i + 1}`,
+          file,
+          preview: compressed.dataUrl,
+          base64: compressed.base64,
+          mediaType: compressed.mediaType,
+          originalSize: compressed.originalSize,
+          compressedSize: compressed.compressedSize,
+        });
+      }
+      setPhotos((prev) => [...prev, ...added]);
+    } catch (err) {
+      console.error('Failed to compress image:', err);
+    } finally {
+      setIsCompressing(false);
+    }
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    handlePhotoFile(file);
+  function handleRemovePhoto(id: string) {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function handleClearAllPhotos() {
+    setPhotos([]);
   }
 
   function startRecording() {
@@ -396,9 +432,15 @@ export function CaptureFlow({
     setExtractError(null);
     try {
       let body: Record<string, unknown>;
-      if (captureMode === 'photo' && photoFile && photoPreview) {
-        const base64 = photoPreview.split(',')[1];
-        body = { mode: 'photo', imageBase64: base64, mediaType: photoFile.type };
+      if (captureMode === 'photo' && photos.length > 0) {
+        body = {
+          mode: 'photo',
+          images: photos.map((p) => ({
+            base64: p.base64,
+            mediaType: p.mediaType,
+            name: p.name,
+          })),
+        };
       } else {
         body = { mode: 'voice', transcript };
       }
@@ -434,6 +476,10 @@ export function CaptureFlow({
         procedure: data.procedure || '',
         plan: data.plan || '',
         notes: data.notes || '',
+        functionScore: data.function_score_0_10 !== null && data.function_score_0_10 !== undefined ? String(data.function_score_0_10) : fields.functionScore,
+        moodScore: data.mood_score_0_10 !== null && data.mood_score_0_10 !== undefined ? String(data.mood_score_0_10) : fields.moodScore,
+        sleepScore: data.sleep_score_0_10 !== null && data.sleep_score_0_10 !== undefined ? String(data.sleep_score_0_10) : fields.sleepScore,
+        qolScore: data.qol_score_0_10 !== null && data.qol_score_0_10 !== undefined ? String(data.qol_score_0_10) : fields.qolScore,
       }, data.encounter_type || fields.encounterType));
       setConfidences(data.confidence || {});
     } catch (e) {
@@ -450,7 +496,7 @@ export function CaptureFlow({
     setStep('review');
   }
 
-  const canExtract = (captureMode === 'photo' && !!photoPreview) || (captureMode === 'voice' && transcript.trim().length > 0);
+  const canExtract = (captureMode === 'photo' && photos.length > 0) || (captureMode === 'voice' && transcript.trim().length > 0);
 
   if (step === 'capture') {
     const isFollowup = fields.encounterType === 'followup';
@@ -511,7 +557,7 @@ export function CaptureFlow({
           </button>
         </div>
 
-        {captureMode === 'photo' && !photoPreview && (
+        {captureMode === 'photo' && photos.length === 0 && (
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Option 1: Live Camera Capture */}
@@ -520,85 +566,136 @@ export function CaptureFlow({
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={handlePhotoChange}
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
                   className="hidden"
                 />
                 <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">📸</span>
                 <span className="text-sm font-semibold text-slate-800">Take Photo (Camera)</span>
                 <span className="text-xs text-slate-500 mt-1">
-                  Snap live photo of handwritten notes or prescription
+                  Snap photo of OPD card, prescription slip, or note
                 </span>
               </label>
 
-              {/* Option 2: Upload from Photo Gallery or Files */}
+              {/* Option 2: Upload from Photo Gallery or Files (supports selecting multiple photos!) */}
               <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 bg-slate-50/60 rounded-xl cursor-pointer hover:bg-slate-100 hover:border-slate-400 transition text-center group shadow-xs">
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={handlePhotoChange}
+                  multiple
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
                   className="hidden"
                 />
                 <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">🖼️</span>
                 <span className="text-sm font-semibold text-slate-800">Choose from Gallery / Files</span>
                 <span className="text-xs text-slate-500 mt-1">
-                  Upload existing photo, screenshot, or scanned report
+                  Select multiple photos (OPD ticket, Rx pages, lab scans)
                 </span>
               </label>
             </div>
 
+            {isCompressing && (
+              <div className="text-xs text-center text-teal-800 bg-teal-50 border border-teal-200 rounded-lg p-2 font-medium animate-pulse">
+                ⚡ Compressing image for ultra-fast AI upload…
+              </div>
+            )}
+
             <p className="text-[11px] text-center text-slate-400">
-              Supports JPG, PNG, WEBP, HEIC · AI extracts diagnosis, pain scores, medications & plan
+              Supports multiple photos · Client-side compressed 40x for lightning-fast Gemini extraction
             </p>
           </div>
         )}
 
-        {captureMode === 'photo' && photoPreview && (
-          <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs space-y-3">
-            <div className="relative group flex justify-center bg-slate-50 rounded-lg p-2 border border-slate-100">
-              <img
-                src={photoPreview}
-                alt="capture preview"
-                className="max-h-72 rounded-lg object-contain shadow-xs"
-              />
+        {captureMode === 'photo' && photos.length > 0 && (
+          <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                  Attached Pages &amp; Photos ({photos.length})
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-semibold border border-emerald-200">
+                  Compressed &bull; Fast Upload Ready
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  setPhotoFile(null);
-                  setPhotoPreview(null);
-                }}
-                className="absolute top-4 right-4 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full p-2 shadow-md transition"
-                title="Remove photo"
+                onClick={handleClearAllPhotos}
+                className="text-xs text-rose-600 hover:text-rose-800 font-medium"
               >
-                <span className="text-xs font-bold leading-none block px-1">✕</span>
+                Clear All
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-1 border-t border-slate-100">
-              <span className="truncate max-w-[220px] font-medium text-slate-700">
-                📄 {photoFile?.name || 'Selected Image'}
-              </span>
-              <div className="flex items-center gap-2">
-                <label className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer text-xs bg-teal-50 px-2.5 py-1 rounded border border-teal-200">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoChange}
-                    className="hidden"
-                  />
-                  📁 Choose File
-                </label>
-                <label className="text-teal-700 hover:text-teal-900 font-semibold cursor-pointer text-xs bg-teal-50 px-2.5 py-1 rounded border border-teal-200">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handlePhotoChange}
-                    className="hidden"
-                  />
-                  📸 Retake
-                </label>
-              </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {photos.map((item, idx) => (
+                <div
+                  key={item.id}
+                  className="relative group rounded-lg border border-slate-200 bg-slate-50 overflow-hidden shadow-2xs flex flex-col justify-between"
+                >
+                  <div className="aspect-4/3 w-full bg-slate-900/5 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={item.preview}
+                      alt={`Page ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-2 bg-white border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-800">Page {idx + 1}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {Math.round(item.compressedSize / 1024)} KB
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePhoto(item.id)}
+                    className="absolute top-1.5 right-1.5 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full h-5 w-5 flex items-center justify-center text-[10px] font-bold shadow-md transition"
+                    title="Remove page"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
+
+            {isCompressing && (
+              <div className="text-xs text-center text-teal-800 bg-teal-50 border border-teal-200 rounded-lg p-2 font-medium animate-pulse">
+                ⚡ Compressing new page…
+              </div>
+            )}
+
+            {/* Quick Add More Pages Buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <label className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-teal-300 bg-teal-50/60 hover:bg-teal-100 text-teal-900 font-semibold text-xs cursor-pointer transition shadow-2xs">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+                <span>📸</span>
+                <span>Snap Another Page</span>
+              </label>
+
+              <label className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer transition shadow-2xs">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+                <span>🖼️</span>
+                <span>Add from Gallery / Files</span>
+              </label>
+            </div>
+
+            <p className="text-[11px] text-slate-400 text-center">
+              💡 You can attach both OPD card (for demographics) and Prescription slip (for medicines). Antigravity AI will extract all details together.
+            </p>
           </div>
         )}
 
@@ -740,7 +837,13 @@ export function CaptureFlow({
               onClick={runExtraction}
               className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white rounded-lg py-2.5 text-sm font-medium shadow-sm transition"
             >
-              {isExtracting ? 'Extracting with Claude AI…' : 'Extract with AI'}
+              {isExtracting
+                ? (captureMode === 'photo'
+                    ? `Extracting with Antigravity AI (Gemini Flash)… analyzing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`
+                    : 'Extracting with Antigravity AI (Gemini Flash)…')
+                : (captureMode === 'photo'
+                    ? `⚡ Extract with Antigravity AI (${photos.length} Photo${photos.length > 1 ? 's' : ''})`
+                    : '⚡ Extract with Antigravity AI')}
             </button>
           </div>
         )}
@@ -838,8 +941,8 @@ export function CaptureFlow({
           </>
         )}
 
-        {captureMode === 'photo' && photoFile && (
-          <HiddenFileInput file={photoFile} />
+        {captureMode === 'photo' && photos.length > 0 && (
+          <HiddenFileInputs files={photos.map((p) => p.file)} />
         )}
 
         {/* ── Retrospective Demographic Update Card from OPD Card Scan ── */}
@@ -1186,18 +1289,52 @@ export function CaptureFlow({
               />
             </FieldSet>
 
-            <FieldSet title="Outcomes (0–10, leave blank if not assessed)">
-              <div className="grid grid-cols-2 gap-3">
-                <TextField label="Function" name="function_score_0_10" value={fields.functionScore}
-                  onChange={(v) => set('functionScore', v)} type="number" />
-                <TextField label="Mood" name="mood_score_0_10" value={fields.moodScore}
-                  onChange={(v) => set('moodScore', v)} type="number" />
-                <TextField label="Sleep" name="sleep_score_0_10" value={fields.sleepScore}
-                  onChange={(v) => set('sleepScore', v)} type="number" />
-                <TextField label="Quality of life" name="qol_score_0_10" value={fields.qolScore}
-                  onChange={(v) => set('qolScore', v)} type="number" />
+            <FieldSet title="Outcomes & Functional Impact (0–10 Scale)">
+              <div className="space-y-2.5">
+                <ScoreSelector
+                  label="Function"
+                  subtitle="Physical mobility & daily activity"
+                  name="function_score_0_10"
+                  value={fields.functionScore}
+                  onChange={(v) => set('functionScore', v)}
+                  anchorLow="Normal activity"
+                  anchorHigh="Disabled / Bedbound"
+                />
+                <ScoreSelector
+                  label="Mood"
+                  subtitle="Anxiety, depression & distress"
+                  name="mood_score_0_10"
+                  value={fields.moodScore}
+                  onChange={(v) => set('moodScore', v)}
+                  anchorLow="Calm / Happy"
+                  anchorHigh="Severe distress"
+                />
+                <ScoreSelector
+                  label="Sleep"
+                  subtitle="Nighttime pain awakenings & insomnia"
+                  name="sleep_score_0_10"
+                  value={fields.sleepScore}
+                  onChange={(v) => set('sleepScore', v)}
+                  anchorLow="Peaceful sleep"
+                  anchorHigh="Severe insomnia"
+                />
+                <ScoreSelector
+                  label="Quality of Life (QoL)"
+                  subtitle="Overall vitality & wellbeing"
+                  name="qol_score_0_10"
+                  value={fields.qolScore}
+                  onChange={(v) => set('qolScore', v)}
+                  anchorLow="Excellent"
+                  anchorHigh="Poorest QoL"
+                />
               </div>
             </FieldSet>
+
+            <PainRegimensBar
+              currentPlan={fields.plan}
+              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+              onAppendNotes={handleAddAdviceToNotes}
+            />
 
             <VerifiedField
               label="Treatment Plan / Medication Updates"
@@ -1526,40 +1663,46 @@ export function CaptureFlow({
                 </p>
               </div>
 
-              <div className="pt-2 border-t border-slate-100">
-                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                  Outcome Scores (0–10, leave blank if not assessed)
+              <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">
+                  Baseline Outcome Scores (0–10 Scale, Tap to score)
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <TextField
-                    label="Function (0 = normal, 10 = disabled)"
-                    name="function_score_0_10"
-                    value={fields.functionScore}
-                    onChange={(v) => set('functionScore', v)}
-                    type="number"
-                  />
-                  <TextField
-                    label="Mood (0 = best, 10 = severe distress)"
-                    name="mood_score_0_10"
-                    value={fields.moodScore}
-                    onChange={(v) => set('moodScore', v)}
-                    type="number"
-                  />
-                  <TextField
-                    label="Sleep (0 = peaceful, 10 = severe insomnia)"
-                    name="sleep_score_0_10"
-                    value={fields.sleepScore}
-                    onChange={(v) => set('sleepScore', v)}
-                    type="number"
-                  />
-                  <TextField
-                    label="Quality of Life (0 = excellent, 10 = poorest)"
-                    name="qol_score_0_10"
-                    value={fields.qolScore}
-                    onChange={(v) => set('qolScore', v)}
-                    type="number"
-                  />
-                </div>
+                <ScoreSelector
+                  label="Function"
+                  subtitle="Physical mobility & daily activity"
+                  name="function_score_0_10"
+                  value={fields.functionScore}
+                  onChange={(v) => set('functionScore', v)}
+                  anchorLow="Normal mobility"
+                  anchorHigh="Severe disability"
+                />
+                <ScoreSelector
+                  label="Mood"
+                  subtitle="Anxiety, depression & distress"
+                  name="mood_score_0_10"
+                  value={fields.moodScore}
+                  onChange={(v) => set('moodScore', v)}
+                  anchorLow="Calm / Happy"
+                  anchorHigh="Severe distress"
+                />
+                <ScoreSelector
+                  label="Sleep"
+                  subtitle="Nighttime pain awakenings & insomnia"
+                  name="sleep_score_0_10"
+                  value={fields.sleepScore}
+                  onChange={(v) => set('sleepScore', v)}
+                  anchorLow="Peaceful sleep"
+                  anchorHigh="Severe insomnia"
+                />
+                <ScoreSelector
+                  label="Quality of Life (QoL)"
+                  subtitle="Overall vitality & life enjoyment"
+                  name="qol_score_0_10"
+                  value={fields.qolScore}
+                  onChange={(v) => set('qolScore', v)}
+                  anchorLow="Excellent"
+                  anchorHigh="Poorest QoL"
+                />
               </div>
 
               {showWidespreadSection ? (
@@ -1591,6 +1734,12 @@ export function CaptureFlow({
                 </div>
               )}
             </FieldSet>
+
+            <PainRegimensBar
+              currentPlan={fields.plan}
+              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+              onAppendNotes={handleAddAdviceToNotes}
+            />
 
             <VerifiedField label="Treatment Plan / Pharmacological Rx" name="plan" value={fields.plan} confidence={confidences.plan}
               onChange={(v) => set('plan', v)} textarea />
@@ -1656,16 +1805,16 @@ export function CaptureFlow({
   );
 }
 
-function HiddenFileInput({ file }: { file: File }) {
+function HiddenFileInputs({ files }: { files: File[] }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (ref.current && file) {
+    if (ref.current && files.length > 0) {
       const dt = new DataTransfer();
-      dt.items.add(file);
+      files.forEach((f) => dt.items.add(f));
       ref.current.files = dt.files;
     }
-  }, [file]);
-  return <input ref={ref} type="file" name="attachment" className="hidden" readOnly />;
+  }, [files]);
+  return <input ref={ref} type="file" name="attachment" multiple className="hidden" readOnly />;
 }
 
 function VerifiedField({

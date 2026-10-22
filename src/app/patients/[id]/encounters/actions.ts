@@ -190,20 +190,23 @@ export async function saveEncounter(patientId: string, formData: FormData) {
     }
   }
 
-  // --- Attachment upload ---
-  const file = formData.get('attachment');
-  if (file instanceof File && file.size > 0) {
-    const path = `${user.id}/${encounter.id}/${file.name}`;
-    const { error: uploadError } = await supabase.storage.from('attachments').upload(path, file, {
-      contentType: file.type,
-    });
-    if (!uploadError) {
-      await supabase.from('attachments').insert({
-        encounter_id: encounter.id,
-        kind: source,
-        storage_path: path,
-        media_type: file.type,
+  // --- Attachment upload (supports multiple photos) ---
+  const files = formData.getAll('attachment');
+  for (const file of files) {
+    if (file instanceof File && file.size > 0) {
+      const cleanName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const path = `${user.id}/${encounter.id}/${cleanName}`;
+      const { error: uploadError } = await supabase.storage.from('attachments').upload(path, file, {
+        contentType: file.type || 'image/jpeg',
       });
+      if (!uploadError) {
+        await supabase.from('attachments').insert({
+          encounter_id: encounter.id,
+          kind: source,
+          storage_path: path,
+          media_type: file.type || 'image/jpeg',
+        });
+      }
     }
   }
 
