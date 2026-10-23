@@ -98,58 +98,51 @@ export default async function PatientPage({ params }: PageProps<'/patients/[id]'
 
         <PatientMediaSection patient={patient} initialMedia={media} />
 
-        {/* Non-Invasive Modalities Quick Access */}
-        <div className="mb-4 bg-white border border-slate-200 rounded-lg p-3 shadow-2xs">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                🌐 Non-Invasive Digital Therapies
-              </span>
-              <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 px-1.5 py-0.2 rounded border border-teal-200">
-                5 Interactive Tools
-              </span>
+        {/* Non-Invasive Modalities Quick Bar */}
+        <div className="mb-4 flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider shrink-0">
+              Therapies:
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Link
+                href="/modalities/prt"
+                className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium transition"
+              >
+                PRT
+              </Link>
+              <Link
+                href="/modalities/graded-pt"
+                className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium transition"
+              >
+                Graded PT
+              </Link>
+              <Link
+                href="/modalities/act"
+                className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium transition"
+              >
+                ACT
+              </Link>
+              <Link
+                href="/modalities/yoga"
+                className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium transition"
+              >
+                Yoga
+              </Link>
+              <Link
+                href="/modalities/cbt-i"
+                className="px-2 py-0.5 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium transition"
+              >
+                CBT-I
+              </Link>
             </div>
-            <Link href="/modalities" className="text-[11px] text-teal-700 hover:text-teal-900 font-medium underline">
-              View All ↗
-            </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-            <Link
-              href="/modalities/prt"
-              className="text-center p-2 rounded-lg border border-teal-200 bg-teal-50/50 hover:bg-teal-100/70 transition"
-            >
-              <span className="block text-xs font-bold text-teal-900">PRT</span>
-              <span className="text-[10px] text-teal-700 block">Somatic Tracking</span>
-            </Link>
-            <Link
-              href="/modalities/graded-pt"
-              className="text-center p-2 rounded-lg border border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 transition"
-            >
-              <span className="block text-xs font-bold text-blue-900">Graded PT</span>
-              <span className="text-[10px] text-blue-700 block">Hinge/Kaia Pacing</span>
-            </Link>
-            <Link
-              href="/modalities/act"
-              className="text-center p-2 rounded-lg border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 transition"
-            >
-              <span className="block text-xs font-bold text-amber-900">ACT</span>
-              <span className="text-[10px] text-amber-800 block">Values Bull’s-Eye</span>
-            </Link>
-            <Link
-              href="/modalities/yoga"
-              className="text-center p-2 rounded-lg border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 transition"
-            >
-              <span className="block text-xs font-bold text-emerald-900">CLBP Yoga</span>
-              <span className="text-[10px] text-emerald-700 block">Spine Pacing</span>
-            </Link>
-            <Link
-              href="/modalities/cbt-i"
-              className="text-center p-2 rounded-lg border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/70 transition col-span-2 sm:col-span-1"
-            >
-              <span className="block text-xs font-bold text-indigo-900">CBT-I</span>
-              <span className="text-[10px] text-indigo-700 block">Sleep Efficiency</span>
-            </Link>
-          </div>
+          <Link
+            href="/modalities"
+            className="text-[11px] text-teal-700 hover:text-teal-900 font-medium underline shrink-0 pl-2"
+          >
+            All ↗
+          </Link>
         </div>
 
         {outcomes && outcomes.baseline_date && outcomes.latest_date && outcomes.baseline_date !== outcomes.latest_date && (

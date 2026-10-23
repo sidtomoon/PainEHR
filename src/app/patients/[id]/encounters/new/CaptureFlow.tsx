@@ -5,10 +5,7 @@ import Link from 'next/link';
 import { CdssPrompts } from './CdssPrompts';
 import { DiagnosisCodeInput } from './DiagnosisCodeInput';
 import { DirectedHistorySection } from './DirectedHistorySection';
-import { ManagementProtocolsSection } from './ManagementProtocolsSection';
-import { NonInvasiveRxBuilder } from './NonInvasiveRxBuilder';
-import { ScoreSelector, PainRegimensBar } from './EncounterScoreComponents';
-import { SmartPhrasesPicker } from '@/app/components/SmartPhrasesPicker';
+import { ScoreSelector, OutcomesMatrix, UnifiedClinicalDock } from './EncounterScoreComponents';
 import { updatePatientDemographics } from '@/app/patients/actions';
 import { compressImage } from '@/lib/image-compress';
 import {
@@ -1289,87 +1286,48 @@ export function CaptureFlow({
               />
             </FieldSet>
 
-            <FieldSet title="Outcomes & Functional Impact (0–10 Scale)">
-              <div className="space-y-2.5">
-                <ScoreSelector
-                  label="Function"
-                  subtitle="Physical mobility & daily activity"
-                  name="function_score_0_10"
-                  value={fields.functionScore}
-                  onChange={(v) => set('functionScore', v)}
-                  anchorLow="Normal activity"
-                  anchorHigh="Disabled / Bedbound"
-                />
-                <ScoreSelector
-                  label="Mood"
-                  subtitle="Anxiety, depression & distress"
-                  name="mood_score_0_10"
-                  value={fields.moodScore}
-                  onChange={(v) => set('moodScore', v)}
-                  anchorLow="Calm / Happy"
-                  anchorHigh="Severe distress"
-                />
-                <ScoreSelector
-                  label="Sleep"
-                  subtitle="Nighttime pain awakenings & insomnia"
-                  name="sleep_score_0_10"
-                  value={fields.sleepScore}
-                  onChange={(v) => set('sleepScore', v)}
-                  anchorLow="Peaceful sleep"
-                  anchorHigh="Severe insomnia"
-                />
-                <ScoreSelector
-                  label="Quality of Life (QoL)"
-                  subtitle="Overall vitality & wellbeing"
-                  name="qol_score_0_10"
-                  value={fields.qolScore}
-                  onChange={(v) => set('qolScore', v)}
-                  anchorLow="Excellent"
-                  anchorHigh="Poorest QoL"
-                />
-              </div>
-            </FieldSet>
+            <div className="p-3 bg-white rounded-xl border border-slate-200">
+              <OutcomesMatrix
+                functionScore={fields.functionScore}
+                moodScore={fields.moodScore}
+                sleepScore={fields.sleepScore}
+                qolScore={fields.qolScore}
+                onChangeFunction={(v) => set('functionScore', v)}
+                onChangeMood={(v) => set('moodScore', v)}
+                onChangeSleep={(v) => set('sleepScore', v)}
+                onChangeQol={(v) => set('qolScore', v)}
+                title="Follow-up Outcomes Assessment (0–10)"
+              />
+            </div>
 
-            <PainRegimensBar
-              currentPlan={fields.plan}
-              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
-              onAppendNotes={handleAddAdviceToNotes}
-            />
+            <div className="space-y-2">
+              <UnifiedClinicalDock
+                currentPlan={fields.plan}
+                currentNotes={fields.notes}
+                onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+                onAppendNotes={handleAddAdviceToNotes}
+                diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
+                diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || ''}
+                painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
+              />
 
-            <VerifiedField
-              label="Treatment Plan / Medication Updates"
-              name="plan"
-              value={fields.plan}
-              confidence={confidences.plan}
-              onChange={(v) => set('plan', v)}
-              textarea
-            />
-            <NonInvasiveRxBuilder
-              currentPlan={fields.plan}
-              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
-              onAppendAdvice={handleAddAdviceToNotes}
-            />
-            <ManagementProtocolsSection
-              diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
-              diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || ''}
-              painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
-              isProcedure={false}
-              currentNotes={fields.notes}
-              onAddAdvice={handleAddAdviceToNotes}
-              onReplaceAdvice={handleReplaceNotes}
-            />
-            <SmartPhrasesPicker
-              onInsert={(text) => {
-                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
-              }}
-            />
-            <TextField
-              label="Notes / Instructions & Advice (Printed on Rx)"
-              name="notes"
-              value={fields.notes}
-              onChange={(v) => set('notes', v)}
-              textarea
-            />
+              <VerifiedField
+                label="Treatment Plan / Medication Updates"
+                name="plan"
+                value={fields.plan}
+                confidence={confidences.plan}
+                onChange={(v) => set('plan', v)}
+                textarea
+              />
+
+              <TextField
+                label="Notes / Instructions & Advice (Printed on Rx)"
+                name="notes"
+                value={fields.notes}
+                onChange={(v) => set('notes', v)}
+                textarea
+              />
+            </div>
           </>
         )}
 
@@ -1494,40 +1452,34 @@ export function CaptureFlow({
               </div>
             </FieldSet>
 
-            <VerifiedField
-              label="Post-Procedure Plan / Instructions"
-              name="plan"
-              value={fields.plan}
-              confidence={confidences.plan}
-              onChange={(v) => set('plan', v)}
-              textarea
-            />
-            <NonInvasiveRxBuilder
-              currentPlan={fields.plan}
-              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
-              onAppendAdvice={handleAddAdviceToNotes}
-            />
-            <ManagementProtocolsSection
-              diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
-              diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || fields.procedure || ''}
-              painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
-              isProcedure={true}
-              currentNotes={fields.notes}
-              onAddAdvice={handleAddAdviceToNotes}
-              onReplaceAdvice={handleReplaceNotes}
-            />
-            <SmartPhrasesPicker
-              onInsert={(text) => {
-                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
-              }}
-            />
-            <TextField
-              label="Procedural Notes & Post-Op Advice (Printed on Rx)"
-              name="notes"
-              value={fields.notes}
-              onChange={(v) => set('notes', v)}
-              textarea
-            />
+            <div className="space-y-2">
+              <UnifiedClinicalDock
+                currentPlan={fields.plan}
+                currentNotes={fields.notes}
+                onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+                onAppendNotes={handleAddAdviceToNotes}
+                diagnosisCode={fields.diagnosisCode || priorEncounter?.diagnosis_code || ''}
+                diagnosisText={fields.diagnosis || priorEncounter?.diagnosis || fields.procedure || ''}
+                painLocation={fields.painLocation || priorEncounter?.pain_location || ''}
+              />
+
+              <VerifiedField
+                label="Post-Procedure Plan / Instructions"
+                name="plan"
+                value={fields.plan}
+                confidence={confidences.plan}
+                onChange={(v) => set('plan', v)}
+                textarea
+              />
+
+              <TextField
+                label="Procedural Notes & Post-Op Advice (Printed on Rx)"
+                name="notes"
+                value={fields.notes}
+                onChange={(v) => set('notes', v)}
+                textarea
+              />
+            </div>
           </>
         )}
 
@@ -1663,55 +1615,22 @@ export function CaptureFlow({
                 </p>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">
-                  Baseline Outcome Scores (0–10 Scale, Tap to score)
-                </div>
-                <ScoreSelector
-                  label="Function"
-                  subtitle="Physical mobility & daily activity"
-                  name="function_score_0_10"
-                  value={fields.functionScore}
-                  onChange={(v) => set('functionScore', v)}
-                  anchorLow="Normal mobility"
-                  anchorHigh="Severe disability"
-                />
-                <ScoreSelector
-                  label="Mood"
-                  subtitle="Anxiety, depression & distress"
-                  name="mood_score_0_10"
-                  value={fields.moodScore}
-                  onChange={(v) => set('moodScore', v)}
-                  anchorLow="Calm / Happy"
-                  anchorHigh="Severe distress"
-                />
-                <ScoreSelector
-                  label="Sleep"
-                  subtitle="Nighttime pain awakenings & insomnia"
-                  name="sleep_score_0_10"
-                  value={fields.sleepScore}
-                  onChange={(v) => set('sleepScore', v)}
-                  anchorLow="Peaceful sleep"
-                  anchorHigh="Severe insomnia"
-                />
-                <ScoreSelector
-                  label="Quality of Life (QoL)"
-                  subtitle="Overall vitality & life enjoyment"
-                  name="qol_score_0_10"
-                  value={fields.qolScore}
-                  onChange={(v) => set('qolScore', v)}
-                  anchorLow="Excellent"
-                  anchorHigh="Poorest QoL"
+              <div className="pt-2 border-t border-slate-100">
+                <OutcomesMatrix
+                  functionScore={fields.functionScore}
+                  moodScore={fields.moodScore}
+                  sleepScore={fields.sleepScore}
+                  qolScore={fields.qolScore}
+                  onChangeFunction={(v) => set('functionScore', v)}
+                  onChangeMood={(v) => set('moodScore', v)}
+                  onChangeSleep={(v) => set('sleepScore', v)}
+                  onChangeQol={(v) => set('qolScore', v)}
+                  title="Baseline Outcomes Assessment (0–10)"
                 />
               </div>
 
               {showWidespreadSection ? (
                 <div className="pt-2 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] text-teal-700 font-medium">
-                      Screening active for {activeRule?.name || 'generalized/arthritic condition'}
-                    </span>
-                  </div>
                   <TriField
                     label="Widespread Body Pain (Multi-quadrant / axial & peripheral)?"
                     name="widespread_pain"
@@ -1735,34 +1654,34 @@ export function CaptureFlow({
               )}
             </FieldSet>
 
-            <PainRegimensBar
-              currentPlan={fields.plan}
-              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
-              onAppendNotes={handleAddAdviceToNotes}
-            />
+            <div className="space-y-2">
+              <UnifiedClinicalDock
+                currentPlan={fields.plan}
+                currentNotes={fields.notes}
+                onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
+                onAppendNotes={handleAddAdviceToNotes}
+                diagnosisCode={fields.diagnosisCode}
+                diagnosisText={fields.diagnosis}
+                painLocation={fields.painLocation}
+              />
 
-            <VerifiedField label="Treatment Plan / Pharmacological Rx" name="plan" value={fields.plan} confidence={confidences.plan}
-              onChange={(v) => set('plan', v)} textarea />
-            <NonInvasiveRxBuilder
-              currentPlan={fields.plan}
-              onAppendPlan={(text) => set('plan', fields.plan ? `${fields.plan}\n${text}` : text)}
-              onAppendAdvice={handleAddAdviceToNotes}
-            />
-            <ManagementProtocolsSection
-              diagnosisCode={fields.diagnosisCode}
-              diagnosisText={fields.diagnosis}
-              painLocation={fields.painLocation}
-              isProcedure={false}
-              currentNotes={fields.notes}
-              onAddAdvice={handleAddAdviceToNotes}
-              onReplaceAdvice={handleReplaceNotes}
-            />
-            <SmartPhrasesPicker
-              onInsert={(text) => {
-                set('notes', fields.notes ? `${fields.notes}\n\n${text}` : text);
-              }}
-            />
-            <TextField label="Clinical Notes & Advice (Printed on Rx)" name="notes" value={fields.notes} onChange={(v) => set('notes', v)} textarea />
+              <VerifiedField
+                label="Treatment Plan / Pharmacological Rx"
+                name="plan"
+                value={fields.plan}
+                confidence={confidences.plan}
+                onChange={(v) => set('plan', v)}
+                textarea
+              />
+
+              <TextField
+                label="Clinical Notes & Advice (Printed on Rx)"
+                name="notes"
+                value={fields.notes}
+                onChange={(v) => set('notes', v)}
+                textarea
+              />
+            </div>
           </>
         )}
 

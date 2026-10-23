@@ -313,20 +313,20 @@ export function QuickRxModal({
 
         <div className="overflow-y-auto space-y-4 py-3 flex-1 pr-1">
           {/* Quick Regimen Templates */}
-          <div className="bg-slate-50/80 border border-slate-200 rounded-lg p-3 space-y-2">
+          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                <span>⚡ 1-Click Pain Regimens</span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-slate-500">Mode:</span>
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                ⚡ 1-Click Regimens
+              </span>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <span className="text-slate-400">Mode:</span>
                 <button
                   type="button"
                   onClick={() => setAppendMode(false)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
                     !appendMode
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200'
+                      ? 'bg-teal-700 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   Replace
@@ -334,10 +334,10 @@ export function QuickRxModal({
                 <button
                   type="button"
                   onClick={() => setAppendMode(true)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
                     appendMode
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200'
+                      ? 'bg-teal-700 text-white shadow-2xs'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
                   + Append
@@ -345,7 +345,7 @@ export function QuickRxModal({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {COMMON_REGIMENS.map((reg) => {
                 const isActive = activeRegimenId === reg.id;
                 return (
@@ -353,10 +353,10 @@ export function QuickRxModal({
                     key={reg.id}
                     type="button"
                     onClick={() => handleApplyRegimen(reg)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition text-left cursor-pointer flex items-center gap-1 shadow-2xs ${
+                    className={`px-2 py-1 rounded-md text-[11px] font-medium border transition text-left cursor-pointer flex items-center gap-1 ${
                       isActive
-                        ? 'bg-teal-600 text-white border-teal-700 ring-2 ring-teal-300'
-                        : 'bg-white hover:bg-teal-50 text-slate-800 hover:text-teal-900 border-slate-300 hover:border-teal-400'
+                        ? 'bg-teal-700 text-white border-teal-800'
+                        : 'bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border-slate-200'
                     }`}
                   >
                     <span>{reg.badge}</span>
@@ -366,8 +366,8 @@ export function QuickRxModal({
             </div>
 
             {regimenFeedback && (
-              <div className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1 pt-1 animate-fadeIn">
-                <span>{regimenFeedback}</span>
+              <div className="text-[11px] text-teal-800 font-medium flex items-center gap-1">
+                <span>✓ {regimenFeedback}</span>
               </div>
             )}
           </div>
@@ -375,79 +375,87 @@ export function QuickRxModal({
           {/* Medicines Table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                Medications List ({items.length})
+              <span className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                Prescribed Medicines ({items.length})
               </span>
               <button
                 type="button"
                 onClick={handleAddItem}
-                className="text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200 transition"
+                className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-2 py-0.5 rounded border border-teal-200 transition"
               >
                 + Add Medicine
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/60 space-y-2"
+                  className="p-2 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition space-y-1.5"
                 >
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                    <div className="sm:col-span-6">
+                  <div className="grid grid-cols-12 gap-1.5 items-center">
+                    <div className="col-span-12 sm:col-span-6">
                       <input
                         type="text"
                         placeholder="Medicine name (e.g. Tab Pregabalin 75mg)"
                         value={item.name}
                         onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-2 py-1 rounded border border-slate-200 bg-slate-50/50 text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
                       />
                     </div>
-                    <div className="sm:col-span-3">
+                    <div className="col-span-5 sm:col-span-3">
                       <input
                         type="text"
-                        placeholder="Dosage (75mg)"
+                        placeholder="Dose (75mg)"
                         value={item.dosage}
                         onChange={(e) => handleUpdateItem(index, 'dosage', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-2 py-1 rounded border border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
                       />
                     </div>
-                    <div className="sm:col-span-3 flex items-center gap-1">
+                    <div className="col-span-5 sm:col-span-2">
                       <input
                         type="text"
                         placeholder="Freq (0-0-1)"
                         value={item.frequency}
                         onChange={(e) => handleUpdateItem(index, 'frequency', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className="w-full px-2 py-1 rounded border border-slate-200 bg-slate-50/50 text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
                       />
-                      {items.length > 1 && (
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 flex justify-end">
+                      {items.length > 1 ? (
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(index)}
-                          className="text-slate-400 hover:text-rose-600 px-1 font-bold text-xs"
-                          title="Remove"
+                          className="text-slate-300 hover:text-rose-600 p-1 text-xs transition"
+                          title="Remove item"
                         >
                           ✕
                         </button>
+                      ) : (
+                        <span className="w-5" />
                       )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="Duration (e.g. 14 days)"
-                      value={item.duration}
-                      onChange={(e) => handleUpdateItem(index, 'duration', e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Instructions (e.g. At bedtime / After food)"
-                      value={item.instructions}
-                      onChange={(e) => handleUpdateItem(index, 'instructions', e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
+                    <div className="sm:col-span-4">
+                      <input
+                        type="text"
+                        placeholder="Duration (14 days)"
+                        value={item.duration}
+                        onChange={(e) => handleUpdateItem(index, 'duration', e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-200 bg-white text-xs font-normal text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    </div>
+                    <div className="sm:col-span-8">
+                      <input
+                        type="text"
+                        placeholder="Instructions (At bedtime / After food)"
+                        value={item.instructions}
+                        onChange={(e) => handleUpdateItem(index, 'instructions', e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-200 bg-white text-xs font-normal text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
