@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-const SYSTEM_PROMPT = `You are an expert clinical data extraction assistant for an Indian pain medicine hospital clinic / OPD registry. Extract structured clinical fields from the capture provided (which may contain multiple photos of hospital OPD registration cards, handwritten doctor notes, prescription slips, lab/MRI reports, or a dictated voice transcript).
+const SYSTEM_PROMPT = `You are an expert clinical data extraction assistant for an Indian pain medicine hospital clinic / OPD registry. Extract structured clinical fields from the capture provided (which may contain PDF documents, hospital OPD registration cards, handwritten doctor notes, prescription slips, lab/MRI reports, discharge summaries, or a dictated voice transcript).
 
 Indian hospital OPD cards (such as from PGI Chandigarh, AIIMS, GMCH, civil hospitals, or private pain clinics) typically contain:
 1. Patient Demographics & Hospital Registration:
@@ -26,7 +26,7 @@ Indian hospital OPD cards (such as from PGI Chandigarh, AIIMS, GMCH, civil hospi
    - Plan / Medications / Dosages (e.g. "Tab Pregabalin 75mg HS x 14 days, Tab Methylcobalamin 1500mcg OD x 30 days, Physiotherapy core strengthening")
    - Clinical Notes / Precautions (e.g. "Avoid forward bending, lumbar support belt, review after 2 weeks")
 
-When multiple images are provided (e.g. Page 1 is OPD Registration Card and Page 2 is Doctor Prescription slip), synthesize the information across all pages together: take demographics from the registration card and medications/plan/diagnosis from the prescription slip!
+When multiple documents or images are provided (e.g. an OPD Registration Card, a Doctor Prescription slip, or an attached MRI/lab PDF report), synthesize the information across all items together: take demographics from the registration card and medications/plan/diagnosis from the prescription slip and reports!
 
 Never hallucinate or invent information. If a field is not stated or is illegible, set it to null and mark its confidence as "low".
 Respond with ONLY a valid raw JSON object (no markdown code blocks, no preamble, no commentary) matching this schema:
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
           });
         }
         parts.push({
-          text: `Extract all patient demographics (CR No, Name, Age, Sex, Phone), clinical findings, Function/Mood/Sleep/QoL scores, and treatment plan across all ${imageList.length} attached clinical pages/photos as instructed.`,
+          text: `Extract all patient demographics (CR No, Name, Age, Sex, Phone), clinical findings, Function/Mood/Sleep/QoL scores, and treatment plan across all ${imageList.length} attached clinical pages, documents, or PDF reports as instructed.`,
         });
       } else {
         parts.push({
@@ -185,18 +185,29 @@ export async function POST(request: Request) {
         const content: Array<Record<string, unknown>> = [];
         if (mode === 'photo' && imageList.length > 0) {
           for (const img of imageList) {
-            content.push({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: img.mediaType,
-                data: img.base64,
-              },
-            });
+            if (img.mediaType === 'application/pdf') {
+              content.push({
+                type: 'document',
+                source: {
+                  type: 'base64',
+                  media_type: 'application/pdf',
+                  data: img.base64,
+                },
+              });
+            } else {
+              content.push({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: img.mediaType,
+                  data: img.base64,
+                },
+              });
+            }
           }
           content.push({
             type: 'text',
-            text: `Extract all patient demographics and clinical fields across all ${imageList.length} attached photos as instructed.`,
+            text: `Extract all patient demographics and clinical fields across all ${imageList.length} attached documents and photos as instructed.`,
           });
         } else {
           content.push({

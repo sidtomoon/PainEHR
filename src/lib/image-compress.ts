@@ -13,6 +13,7 @@ export interface CompressedImage {
   compressedSize: number;
   width: number;
   height: number;
+  isPdf?: boolean;
 }
 
 export async function compressImage(
@@ -20,6 +21,47 @@ export async function compressImage(
   maxDimension = 1600,
   quality = 0.82
 ): Promise<CompressedImage> {
+  const isPdf =
+    file.type === 'application/pdf' ||
+    file.name?.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    if (typeof window === 'undefined') {
+      const buffer = await file.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      return {
+        base64,
+        dataUrl: `data:application/pdf;base64,${base64}`,
+        mediaType: 'application/pdf',
+        originalSize: file.size,
+        compressedSize: file.size,
+        width: 0,
+        height: 0,
+        isPdf: true,
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read PDF file'));
+      reader.onload = (e) => {
+        const src = e.target?.result as string;
+        const base64 = src.includes(',') ? src.split(',')[1] : src;
+        resolve({
+          base64,
+          dataUrl: src,
+          mediaType: 'application/pdf',
+          originalSize: file.size,
+          compressedSize: file.size,
+          width: 0,
+          height: 0,
+          isPdf: true,
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   // If not in a browser environment, return basic fallback
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     const buffer = await file.arrayBuffer();

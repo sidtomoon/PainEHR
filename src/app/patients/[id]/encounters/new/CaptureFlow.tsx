@@ -174,6 +174,7 @@ export function CaptureFlow({
     mediaType: string;
     originalSize: number;
     compressedSize: number;
+    isPdf?: boolean;
   }>>([]);
   const [isCompressing, setIsCompressing] = useState(false);
 
@@ -299,21 +300,23 @@ export function CaptureFlow({
       const added: typeof photos = [];
       for (let i = 0; i < filesArray.length; i++) {
         const file = filesArray[i];
-        const compressed = await compressImage(file, 1600, 0.82);
+        const processed = await compressImage(file, 1600, 0.82);
+        const isPdf = !!processed.isPdf || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
         added.push({
           id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
-          name: file.name || `Photo ${photos.length + i + 1}`,
+          name: file.name || (isPdf ? `Document ${photos.length + i + 1}.pdf` : `Photo ${photos.length + i + 1}`),
           file,
-          preview: compressed.dataUrl,
-          base64: compressed.base64,
-          mediaType: compressed.mediaType,
-          originalSize: compressed.originalSize,
-          compressedSize: compressed.compressedSize,
+          preview: processed.dataUrl,
+          base64: processed.base64,
+          mediaType: isPdf ? 'application/pdf' : processed.mediaType,
+          originalSize: processed.originalSize,
+          compressedSize: processed.compressedSize,
+          isPdf,
         });
       }
       setPhotos((prev) => [...prev, ...added]);
     } catch (err) {
-      console.error('Failed to compress image:', err);
+      console.error('Failed to process incoming file:', err);
     } finally {
       setIsCompressing(false);
     }
@@ -544,7 +547,7 @@ export function CaptureFlow({
             onClick={() => setCaptureMode('photo')}
             className={`rounded-lg border px-4 py-3.5 text-sm font-medium transition ${captureMode === 'photo' ? 'border-teal-500 bg-teal-50 text-teal-700 shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
           >
-            📷 Photo Note / Rx
+            📄 PDF / 📷 Photo Note
           </button>
           <button
             onClick={() => setCaptureMode('voice')}
@@ -556,9 +559,9 @@ export function CaptureFlow({
 
         {captureMode === 'photo' && photos.length === 0 && (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {/* Option 1: Live Camera Capture */}
-              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-teal-300 bg-teal-50/40 rounded-xl cursor-pointer hover:bg-teal-50 hover:border-teal-400 transition text-center group shadow-xs">
+              <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-teal-300 bg-teal-50/40 rounded-xl cursor-pointer hover:bg-teal-50 hover:border-teal-400 transition text-center group shadow-xs">
                 <input
                   type="file"
                   accept="image/*"
@@ -567,39 +570,56 @@ export function CaptureFlow({
                   disabled={isCompressing}
                   className="hidden"
                 />
-                <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">📸</span>
-                <span className="text-sm font-semibold text-slate-800">Take Photo (Camera)</span>
-                <span className="text-xs text-slate-500 mt-1">
-                  Snap photo of OPD card, prescription slip, or note
+                <span className="text-2xl mb-1.5 group-hover:scale-110 transition-transform">📸</span>
+                <span className="text-xs font-bold text-slate-800">Take Photo (Camera)</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                  Snap OPD ticket, prescription slip, or note
                 </span>
               </label>
 
-              {/* Option 2: Upload from Photo Gallery or Files (supports selecting multiple photos!) */}
-              <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 bg-slate-50/60 rounded-xl cursor-pointer hover:bg-slate-100 hover:border-slate-400 transition text-center group shadow-xs">
+              {/* Option 2: Upload PDF File */}
+              <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-rose-300 bg-rose-50/40 rounded-xl cursor-pointer hover:bg-rose-50 hover:border-rose-400 transition text-center group shadow-xs">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="application/pdf,.pdf"
                   multiple
                   onChange={(e) => handleAddPhotos(e.target.files)}
                   disabled={isCompressing}
                   className="hidden"
                 />
-                <span className="text-3xl mb-2 group-hover:scale-110 transition-transform">🖼️</span>
-                <span className="text-sm font-semibold text-slate-800">Choose from Gallery / Files</span>
-                <span className="text-xs text-slate-500 mt-1">
-                  Select multiple photos (OPD ticket, Rx pages, lab scans)
+                <span className="text-2xl mb-1.5 group-hover:scale-110 transition-transform">📄</span>
+                <span className="text-xs font-bold text-slate-800">Upload PDF File</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                  Lab reports, MRI findings, discharge PDF
+                </span>
+              </label>
+
+              {/* Option 3: Choose from Gallery / Files */}
+              <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-slate-300 bg-slate-50/60 rounded-xl cursor-pointer hover:bg-slate-100 hover:border-slate-400 transition text-center group shadow-xs">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf,.pdf"
+                  multiple
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+                <span className="text-2xl mb-1.5 group-hover:scale-110 transition-transform">🖼️</span>
+                <span className="text-xs font-bold text-slate-800">Gallery / Files</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                  Select multiple photos or documents
                 </span>
               </label>
             </div>
 
             {isCompressing && (
               <div className="text-xs text-center text-teal-800 bg-teal-50 border border-teal-200 rounded-lg p-2 font-medium animate-pulse">
-                ⚡ Compressing image for ultra-fast AI upload…
+                ⚡ Processing file for ultra-fast AI upload…
               </div>
             )}
 
             <p className="text-[11px] text-center text-slate-400">
-              Supports multiple photos · Client-side compressed 40x for lightning-fast Gemini extraction
+              Supports PDF files and photos · Synthesizes multiple pages and reports with Google Gemini Flash
             </p>
           </div>
         )}
@@ -609,10 +629,10 @@ export function CaptureFlow({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Attached Pages &amp; Photos ({photos.length})
+                  Attached Documents &amp; Photos ({photos.length})
                 </span>
                 <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-semibold border border-emerald-200">
-                  Compressed &bull; Fast Upload Ready
+                  Ready for AI Analysis
                 </span>
               </div>
               <button
@@ -631,15 +651,32 @@ export function CaptureFlow({
                   className="relative group rounded-lg border border-slate-200 bg-slate-50 overflow-hidden shadow-2xs flex flex-col justify-between"
                 >
                   <div className="aspect-4/3 w-full bg-slate-900/5 flex items-center justify-center overflow-hidden">
-                    <img
-                      src={item.preview}
-                      alt={`Page ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    {item.isPdf || item.mediaType === 'application/pdf' ? (
+                      <div className="flex flex-col items-center justify-center p-3 text-center w-full h-full bg-rose-50/40">
+                        <span className="text-3xl mb-1">📄</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded border border-rose-200">
+                          PDF Report
+                        </span>
+                        <span
+                          className="text-[11px] font-semibold text-slate-700 truncate max-w-[140px] mt-1.5"
+                          title={item.name}
+                        >
+                          {item.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <img
+                        src={item.preview}
+                        alt={`Page ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                   <div className="p-2 bg-white border-t border-slate-100 flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-slate-800">Page {idx + 1}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
+                    <span className="font-semibold text-slate-800 truncate max-w-[110px]" title={item.name}>
+                      {item.isPdf ? item.name : `Page ${idx + 1}`}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono shrink-0">
                       {Math.round(item.compressedSize / 1024)} KB
                     </span>
                   </div>
@@ -647,7 +684,7 @@ export function CaptureFlow({
                     type="button"
                     onClick={() => handleRemovePhoto(item.id)}
                     className="absolute top-1.5 right-1.5 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full h-5 w-5 flex items-center justify-center text-[10px] font-bold shadow-md transition"
-                    title="Remove page"
+                    title="Remove item"
                   >
                     ✕
                   </button>
@@ -657,13 +694,13 @@ export function CaptureFlow({
 
             {isCompressing && (
               <div className="text-xs text-center text-teal-800 bg-teal-50 border border-teal-200 rounded-lg p-2 font-medium animate-pulse">
-                ⚡ Compressing new page…
+                ⚡ Processing new page or PDF report…
               </div>
             )}
 
             {/* Quick Add More Pages Buttons */}
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-              <label className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-teal-300 bg-teal-50/60 hover:bg-teal-100 text-teal-900 font-semibold text-xs cursor-pointer transition shadow-2xs">
+              <label className="flex-1 min-w-[110px] flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-teal-300 bg-teal-50/60 hover:bg-teal-100 text-teal-900 font-semibold text-xs cursor-pointer transition shadow-2xs">
                 <input
                   type="file"
                   accept="image/*"
@@ -673,25 +710,38 @@ export function CaptureFlow({
                   className="hidden"
                 />
                 <span>📸</span>
-                <span>Snap Another Page</span>
+                <span>Snap Photo</span>
               </label>
 
-              <label className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer transition shadow-2xs">
+              <label className="flex-1 min-w-[110px] flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-300 bg-rose-50/60 hover:bg-rose-100 text-rose-900 font-semibold text-xs cursor-pointer transition shadow-2xs">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  onChange={(e) => handleAddPhotos(e.target.files)}
+                  disabled={isCompressing}
+                  className="hidden"
+                />
+                <span>📄</span>
+                <span>Add PDF</span>
+              </label>
+
+              <label className="flex-1 min-w-[110px] flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs cursor-pointer transition shadow-2xs">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf,.pdf"
                   multiple
                   onChange={(e) => handleAddPhotos(e.target.files)}
                   disabled={isCompressing}
                   className="hidden"
                 />
                 <span>🖼️</span>
-                <span>Add from Gallery / Files</span>
+                <span>Add Photos</span>
               </label>
             </div>
 
             <p className="text-[11px] text-slate-400 text-center">
-              💡 You can attach both OPD card (for demographics) and Prescription slip (for medicines). Antigravity AI will extract all details together.
+              💡 You can attach multiple items: OPD card photo, Prescription slip, and PDF lab/MRI reports. Antigravity AI will synthesize all details together.
             </p>
           </div>
         )}
@@ -836,10 +886,10 @@ export function CaptureFlow({
             >
               {isExtracting
                 ? (captureMode === 'photo'
-                    ? `Extracting with Antigravity AI (Gemini Flash)… analyzing ${photos.length} photo${photos.length > 1 ? 's' : ''}…`
+                    ? `Extracting with Antigravity AI (Gemini Flash)… analyzing ${photos.length} attached item${photos.length > 1 ? 's' : ''}…`
                     : 'Extracting with Antigravity AI (Gemini Flash)…')
                 : (captureMode === 'photo'
-                    ? `⚡ Extract with Antigravity AI (${photos.length} Photo${photos.length > 1 ? 's' : ''})`
+                    ? `⚡ Extract with Antigravity AI (${photos.length} ${photos.some((p) => p.isPdf) ? (photos.every((p) => p.isPdf) ? (photos.length > 1 ? 'PDFs' : 'PDF') : 'Documents') : (photos.length > 1 ? 'Photos' : 'Photo')})`
                     : '⚡ Extract with Antigravity AI')}
             </button>
           </div>
